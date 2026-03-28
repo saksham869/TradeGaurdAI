@@ -1,36 +1,56 @@
-This is a [Next.js](https://nextjs.org/) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
+# TradeGuard AI
 
-## Getting Started
+Parallel Multi-Agent Financial Intelligence Platform.
 
-First, run the development server:
+## 🚀 Overview
 
+TradeGuard AI leverages multiple LLMs (Claude, Grok, Perplexity) in parallel to analyze financial markets, social sentiment, and user-submitted journal entries to protect retail traders from common traps/mistakes.
+
+### Core Features (V1)
+- **Intelligence Feed**: Ingests real-time market data/news and digests using AI analysis to highlight facts vs hype.
+- **Research Terminal**: Side-by-side comparative analysis combining standard market data providers with direct AI queries.
+- **Trading Journal**: Analyzes user behavior logs to identify psychological traps using dynamic reasoning loops.
+
+## 🛠️ Tech Stack
+
+- **Frontend**: Next.js 14, React 18, Tailwind CSS, Framer Motion
+- **UI Components**: shadcn/ui, Lucide Icons, Lightweight Charts
+- **Database**: Prisma ORM, PostgreSQL (via Supabase)
+- **Caching/State**: Zustand, Upstash Redis
+- **Auth**: Clerk Auth
+- **AI Models**: Claude 3.5 Sonnet, Grok beta, Perplexity Sonar-large
+- **Pub/Sub**: Pusher
+
+## ⚙️ Setup Instructions
+
+### 1. Install Dependencies
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+pnpm install
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### 2. Configure Environment variables
+Copy the template `.env.local` to configure keys:
+```bash
+cp .env.local.example .env.local
+```
+Fill in paths for **Clerk**, **Supabase**, **Upstash**, and AI models (**Anthropic/XAI/Perplexity**).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### 3. Setup Database
+```bash
+pnpm prisma generate
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/basic-features/font-optimization) to automatically optimize and load Inter, a custom Google Font.
+### 4. Run Development Server
+```bash
+pnpm run dev
+```
 
-## Learn More
+## 📅 Background Layouts (Crons)
+Equipped with Vercel crons for background maintenance:
+- `/api/cron/morning-brief`: Daily briefing digest
+- `/api/cron/news-ingestion`: Regular feed ingest checks
+- `/api/cron/trending-scan`: Social volume monitoring
+- `/api/cron/cleanup`: Logs pruning
 
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js/) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/deployment) for more details.
+## ⚖️ License
+MIT / Proprietary

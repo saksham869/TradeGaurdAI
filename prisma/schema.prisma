@@ -1,0 +1,199 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum Plan {
+  FREE
+  PRO
+}
+
+enum AssetClass {
+  STOCK
+  CRYPTO
+  FOREX
+  ETF
+}
+
+enum FeedEventType {
+  NEWS
+  HYPE_ALERT
+  ECONOMIC_EVENT
+  EARNINGS
+  MARKET_WIDE
+  PRICE_ACTION
+}
+
+enum ImpactLevel {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum EmotionTag {
+  FOMO
+  REVENGE
+  DISCIPLINED
+  FEARFUL
+  OVERCONFIDENT
+  NEUTRAL
+  UNCLEAR
+  PANIC
+  GREED
+}
+
+model User {
+  id           String          @id @default(cuid())
+  clerkId      String          @unique
+  email        String          @unique
+  name         String?
+  timezone     String          @default("America/New_York")
+  currency     String          @default("USD")
+  plan         Plan            @default(FREE)
+  onboarded    Boolean         @default(false)
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+  watchlist    WatchlistItem[]
+  journals     JournalEntry[]
+  psychProfile PsychProfile?
+  @@index([clerkId])
+}
+
+model WatchlistItem {
+  id         String     @id @default(cuid())
+  userId     String
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  symbol     String
+  assetClass AssetClass @default(STOCK)
+  exchange   String?
+  addedAt    DateTime   @default(now())
+  @@unique([userId, symbol])
+  @@index([userId])
+}
+
+model FeedEvent {
+  id             String        @id @default(cuid())
+  symbol         String?
+  assetClass     AssetClass?
+  eventType      FeedEventType
+  headline       String
+  source         String?
+  sourceUrl      String?
+  rawSummary     String        @db.Text
+  aiAnalysis     Json
+  sentimentScore Int
+  sentimentLabel String
+  impactLevel    ImpactLevel
+  retailTrap     Boolean       @default(false)
+  retailTrapText String?
+  hypeRating     String?
+  grokWarning    String?
+  publishedAt    DateTime
+  processedAt    DateTime      @default(now())
+  expiresAt      DateTime
+  @@index([symbol, publishedAt])
+  @@index([eventType, publishedAt])
+  @@index([expiresAt])
+}
+
+model TickerAnalysis {
+  id                   String     @id @default(cuid())
+  symbol               String     @unique
+  assetClass           AssetClass
+  priceAtAnalysis      Float
+  priceChange24h       Float?
+  newsImpact           Json
+  technicalRead        Json
+  retailTrapAnalysis   Json
+  synthesis            Json
+  overallSentiment     Int
+  overallLabel         String
+  recommendation       String
+  recommendationReason String
+  support1             Float?
+  support2             Float?
+  resistance1          Float?
+  resistance2          Float?
+  vwap                 Float?
+  generatedAt          DateTime   @default(now())
+  validUntil           DateTime
+  @@index([symbol])
+}
+
+model JournalEntry {
+  id               String      @id @default(cuid())
+  userId           String
+  user             User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date             DateTime    @default(now())
+  symbol           String?
+  assetClass       AssetClass?
+  priceMove        Float?
+  tradedToday      Boolean     @default(false)
+  rawText          String      @db.Text
+  aiResponse       Json?
+  emotionTag       EmotionTag  @default(NEUTRAL)
+  processingStatus String      @default("complete")
+  createdAt        DateTime    @default(now())
+  @@index([userId, date])
+  @@index([userId, emotionTag])
+}
+
+model PsychProfile {
+  id            String      @id @default(cuid())
+  userId        String      @unique
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  streakDays    Int         @default(0)
+  longestStreak Int         @default(0)
+  totalEntries  Int         @default(0)
+  dominantTag   EmotionTag?
+  tagFrequency  Json        @default("{}")
+  weeklyInsight String?     @db.Text
+  lastInsightAt DateTime?
+  updatedAt     DateTime    @updatedAt
+}
+
+model EconomicEvent {
+  id         String   @id @default(cuid())
+  externalId String   @unique
+  title      String
+  country    String
+  currency   String
+  eventDate  DateTime
+  actual     String?
+  forecast   String?
+  previous   String?
+  impact     String
+  aiPreview  String?  @db.Text
+  createdAt  DateTime @default(now())
+  @@index([eventDate])
+}
+
+model TrendingSnapshot {
+  id             String     @id @default(cuid())
+  symbol         String
+  assetClass     AssetClass @default(STOCK)
+  mentionCount   Int
+  sentimentScore Float
+  hypeRating     String
+  grokAnalysis   String?    @db.Text
+  priceAtCapture Float?
+  priceChange1h  Float?
+  capturedAt     DateTime   @default(now())
+  @@index([capturedAt])
+}
+
+model MarketBrief {
+  id          String   @id @default(cuid())
+  briefDate   String   @unique
+  aiSummary   Json
+  vixLevel    Float?
+  topEvents   Json     @default("[]")
+  sectors     Json     @default("{}")
+  generatedAt DateTime @default(now())
+}
