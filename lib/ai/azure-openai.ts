@@ -31,5 +31,7 @@ export async function callAzureOpenAI(
   }
 
   const data = await response.json()
-  return data.choices[0].message.content as string
+  const content = data.choices?.[0]?.message?.content
+  if (!content) throw new Error('Azure OpenAI returned empty response')
+  return content as string
 }

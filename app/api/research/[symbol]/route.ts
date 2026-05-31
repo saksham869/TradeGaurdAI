@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { analyzeTickerParallel } from '@/lib/services/research.service'
+import { getUserId } from '@/lib/auth'
 
 export async function GET(request: NextRequest, { params }: { params: { symbol: string } }) {
+  const userId = await getUserId()
+  if (!userId) return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 })
+
   try {
     const symbol = params.symbol.toUpperCase()
     const result = await analyzeTickerParallel(symbol).catch(() => ({

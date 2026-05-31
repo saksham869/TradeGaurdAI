@@ -30,6 +30,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'Text is required' }, { status: 400 })
     }
 
+    if (rawText.length > 10_000) {
+      return NextResponse.json({ success: false, error: 'Entry too long (max 10,000 characters)' }, { status: 400 })
+    }
+
     // Azure Content Safety — non-blocking, gates riskFlag only
     const safety = await checkContentSafety(rawText)
 

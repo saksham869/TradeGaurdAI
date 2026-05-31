@@ -101,8 +101,8 @@ export async function analyzeTickerParallel(symbol: string) {
     const techObj = parseSafe(techRes)
     const trapObj = parseSafe(trapRes)
 
-    // Step 3: Final synthesis
-    const synthesisRes = await routeAITask('synthesis', PROMPTS.TICKER_SYNTHESIS({
+    // Step 3: Final synthesis — routed to Azure OpenAI GPT-4o via deep_research
+    const synthesisRes = await routeAITask('deep_research', PROMPTS.TICKER_SYNTHESIS({
       symbol,
       currentPrice: priceData.price,
       newsScore: newsObj.sentimentScore ?? 50,
