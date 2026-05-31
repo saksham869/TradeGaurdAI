@@ -13,6 +13,36 @@ enum Plan {
   PRO
 }
 
+enum PositionSide {
+  LONG
+  SHORT
+}
+
+enum PositionStatus {
+  OPEN
+  CLOSED
+}
+
+enum PositionSource {
+  MANUAL
+  BROKER_WEBHOOK
+}
+
+enum SessionStatus {
+  ACTIVE
+  PAUSED
+  ENDED
+}
+
+enum PerspectiveType {
+  TECHNICAL
+  INSTITUTIONAL
+  DARK_POOL
+  SOCIAL
+  FUNDAMENTAL
+  BEHAVIORAL
+}
+
 enum AssetClass {
   STOCK
   CRYPTO
@@ -62,6 +92,7 @@ model User {
   watchlist    WatchlistItem[]
   journals     JournalEntry[]
   psychProfile PsychProfile?
+  positions    Position[]
   @@index([clerkId])
 }
 
@@ -197,4 +228,68 @@ model MarketBrief {
   topEvents   Json     @default("[]")
   sectors     Json     @default("{}")
   generatedAt DateTime @default(now())
+}
+
+// =============================================================================
+// V5 — Live Trading Copilot
+// =============================================================================
+
+model Position {
+  id            String         @id @default(cuid())
+  userId        String
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  symbol        String
+  assetClass    AssetClass     @default(STOCK)
+  side          PositionSide
+  entryPrice    Float
+  quantity      Float
+  stopLoss      Float?
+  targetPrice   Float?
+  status        PositionStatus @default(OPEN)
+  source        PositionSource @default(MANUAL)
+  openedAt      DateTime       @default(now())
+  closedAt      DateTime?
+  exitPrice     Float?
+  pnlDollar     Float?
+  pnlPct        Float?
+  notes         String?        @db.Text
+  session       CopilotSession?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  @@index([userId, status])
+  @@index([userId, openedAt])
+}
+
+model CopilotSession {
+  id                String              @id @default(cuid())
+  positionId        String              @unique
+  position          Position            @relation(fields: [positionId], references: [id], onDelete: Cascade)
+  status            SessionStatus       @default(ACTIVE)
+  refreshCount      Int                 @default(0)
+  lastRefreshedAt   DateTime?
+  overallSignal     String?
+  consensusSummary  String?             @db.Text
+  stopLossNote      String?
+  nextDecisionLevel Float?
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  perspectives      CopilotPerspective[]
+  @@index([status])
+}
+
+model CopilotPerspective {
+  id           String          @id @default(cuid())
+  sessionId    String
+  session      CopilotSession  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  type         PerspectiveType
+  refreshIndex Int
+  model        String
+  rawOutput    Json
+  summary      String          @db.Text
+  signal       String?
+  alertLevel   ImpactLevel     @default(LOW)
+  urgentAlert  String?
+  generatedAt  DateTime        @default(now())
+  @@index([sessionId, refreshIndex])
+  @@index([sessionId, type, refreshIndex])
 }
