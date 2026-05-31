@@ -2,6 +2,7 @@ import { redis } from '../redis'
 import { callClaude } from './claude'
 import { callGrok } from './grok'
 import { callPerplexity } from './perplexity'
+import { callAzureOpenAI } from './azure-openai'
 import crypto from 'crypto'
 
 export type TaskType =
@@ -55,8 +56,13 @@ export async function routeAITask(
       responseText = await callClaude(prompt, options)
       break
     case 'deep_research':
-      // V4: replace with callGemini
-      responseText = await callClaude(prompt, options)
+      // Azure OpenAI GPT-4o, fallback to Claude
+      try {
+        responseText = await callAzureOpenAI(prompt, options)
+      } catch (azureErr) {
+        console.warn('Azure OpenAI unavailable, falling back to Claude:', azureErr)
+        responseText = await callClaude(prompt, options)
+      }
       break
     default:
       responseText = await callClaude(prompt, options)

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import db from '@/lib/db'
 import { processJournalEntry } from '@/lib/services/journal.service'
 import { getUserId } from '@/lib/auth'
+import { checkContentSafety } from '@/lib/ai/azure-content-safety'
 
 export async function GET() {
   const userId = await getUserId()
@@ -29,13 +30,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'Text is required' }, { status: 400 })
     }
 
+    // Azure Content Safety — non-blocking, gates riskFlag only
+    const safety = await checkContentSafety(rawText)
+
     const entry = await db.journalEntry.create({
       data: {
         userId,
         rawText,
         symbol: symbol || null,
-        processingStatus: 'processing'
-      }
+        processingStatus: 'processing',
+        riskFlag: safety.flagged,
+      },
     })
 
     // Synch processing for V1
