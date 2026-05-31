@@ -4,12 +4,13 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard, Search, BookOpen, Star, Settings,
-  TrendingUp, Zap
+  TrendingUp, Zap, Radio
 } from 'lucide-react'
 
 const links = [
   { href: '/feed', label: 'Intelligence Feed', icon: LayoutDashboard },
   { href: '/research', label: 'Research', icon: Search },
+  { href: '/copilot', label: 'Live Copilot', icon: Radio },
   { href: '/journal', label: 'Journal', icon: BookOpen },
   { href: '/watchlist', label: 'Watchlist', icon: Star },
   { href: '/settings', label: 'Settings', icon: Settings },

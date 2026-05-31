@@ -145,7 +145,7 @@ export async function runCopilotAnalysis(sessionId: string, position: Position) 
   // 9. Pusher — push to user's private channel so frontend updates instantly
   try {
     await pusherServer.trigger(
-      `private-user-${position.userId}`,
+      `copilot-${position.id}`,
       'copilot-update',
       { positionId: position.id, session: updatedSession, perspectives }
     )
