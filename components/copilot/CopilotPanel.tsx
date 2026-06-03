@@ -1,8 +1,22 @@
 "use client"
 
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { RefreshCw, Play, ChevronDown, ChevronUp, AlertTriangle, Radio, Clock } from 'lucide-react'
+import { RefreshCw, Play, ChevronDown, ChevronUp, AlertTriangle, Radio, Clock, X, DollarSign, Zap } from 'lucide-react'
 import { pusherClient } from '@/lib/pusher-client'
+import TiltInterventionModal from './TiltInterventionModal'
+import type { BehavioralRawOutput } from './TiltInterventionModal'
+
+// Demo payload — fires the TILT modal on demand during hackathon presentation
+const DEMO_TILT_DATA: BehavioralRawOutput = {
+  psychState:             'TILT',
+  stateScore:             87,
+  likelyNextMistake:      'REVENGE_TRADE',
+  warningMessage:         'You\'ve been in this trade for 47 minutes and are down 2.1%. Your journal history shows you revenge trade after losses exceeding 1.5%. You are exhibiting the exact pattern that cost you $1,400 last month — emotional decision-making under drawdown pressure.',
+  recommendedAction:      'CLOSE_PLATFORM',
+  breathingRoom:          'This trade does not define you. One loss is not a disaster. The market will still be here tomorrow — your capital needs to be too.',
+  shouldStopTradingToday: true,
+  stopReason:             'Behavioral score 87/100 — highest risk state. Stopping now preserves capital and prevents cascading losses.',
+}
 
 // ─── types ────────────────────────────────────────────────────────────────────
 
@@ -43,11 +57,11 @@ const SIGNAL_ORDER: Record<string, number> = {
 }
 
 const OVERALL_SIGNAL_STYLE: Record<string, { color: string; bg: string; border: string }> = {
-  FAVORABLE_CONDITIONS: { color: 'var(--bull)',         bg: 'var(--bull-dim)',      border: 'rgba(34,197,94,0.25)' },
+  FAVORABLE_CONDITIONS: { color: 'var(--bull)',         bg: 'var(--bull-dim)',        border: 'rgba(34,197,94,0.25)' },
   HOLD_POSITION:        { color: 'var(--accent-blue)',  bg: 'var(--accent-blue-dim)', border: 'rgba(59,130,246,0.25)' },
-  ADD_CAUTION:          { color: 'var(--warning)',      bg: 'var(--warning-dim)',   border: 'rgba(245,158,11,0.25)' },
-  REVIEW_STOP:          { color: 'var(--warning)',      bg: 'var(--warning-dim)',   border: 'rgba(245,158,11,0.25)' },
-  EXIT_NOW:             { color: 'var(--bear)',         bg: 'var(--bear-dim)',      border: 'rgba(239,68,68,0.25)' },
+  ADD_CAUTION:          { color: 'var(--warning)',      bg: 'var(--warning-dim)',     border: 'rgba(245,158,11,0.25)' },
+  REVIEW_STOP:          { color: 'var(--warning)',      bg: 'var(--warning-dim)',     border: 'rgba(245,158,11,0.25)' },
+  EXIT_NOW:             { color: 'var(--bear)',         bg: 'var(--bear-dim)',        border: 'rgba(239,68,68,0.25)' },
 }
 
 function signalColor(signal: string | null): string {
@@ -69,9 +83,18 @@ function alertLevelColor(level: string): string {
 function elapsed(iso: string | null): string {
   if (!iso) return '—'
   const sec = Math.floor((Date.now() - new Date(iso).getTime()) / 1000)
-  if (sec < 60)  return `${sec}s ago`
+  if (sec < 60)   return `${sec}s ago`
   if (sec < 3600) return `${Math.floor(sec / 60)}m ago`
-  return `${Math.floor(sec / 3600)}h ago`
+  return `${Math.floor(sec / 3600)}h ${Math.floor((sec % 3600) / 60)}m ago`
+}
+
+function timeInTrade(openedAt: string): string {
+  const sec = Math.floor((Date.now() - new Date(openedAt).getTime()) / 1000)
+  if (sec < 60)   return `${sec}s`
+  if (sec < 3600) return `${Math.floor(sec / 60)}m`
+  const h = Math.floor(sec / 3600)
+  const m = Math.floor((sec % 3600) / 60)
+  return m > 0 ? `${h}h ${m}m` : `${h}h`
 }
 
 // ─── Perspective card ──────────────────────────────────────────────────────
@@ -82,7 +105,6 @@ function PerspectiveCard({ p }: { p: Perspective }) {
 
   return (
     <div className="glass-card" style={{ padding: '14px' }}>
-      {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
           <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: meta.color, flexShrink: 0 }} />
@@ -106,12 +128,10 @@ function PerspectiveCard({ p }: { p: Perspective }) {
         )}
       </div>
 
-      {/* Model label */}
       <div style={{ fontSize: '10px', color: 'var(--text-muted)', fontFamily: 'JetBrains Mono, monospace', marginBottom: '8px' }}>
         {meta.model}
       </div>
 
-      {/* Urgent alert */}
       {p.urgentAlert && (
         <div style={{
           background: 'var(--bear-dim)', border: '1px solid rgba(239,68,68,0.2)',
@@ -122,12 +142,10 @@ function PerspectiveCard({ p }: { p: Perspective }) {
         </div>
       )}
 
-      {/* Summary */}
       <p style={{ fontSize: '12px', color: 'var(--text-secondary)', lineHeight: '1.6' }}>
         {p.summary || 'Analysis unavailable.'}
       </p>
 
-      {/* Expand raw output */}
       {Object.keys(p.rawOutput ?? {}).length > 0 && (
         <button
           onClick={() => setExpanded(!expanded)}
@@ -158,18 +176,25 @@ function PerspectiveCard({ p }: { p: Perspective }) {
 
 // ─── Main panel ────────────────────────────────────────────────────────────
 
-interface Props { position: Position }
+interface Props {
+  position: Position
+  onPositionUpdate?: (updated: any) => void
+}
 
-export default function CopilotPanel({ position }: Props) {
-  const [session,        setSession]        = useState<Session | null>(null)
-  const [analyzing,      setAnalyzing]      = useState(false)
-  const [loading,        setLoading]        = useState(true)
-  const [tick,           setTick]           = useState(0)          // forces elapsed re-render
-  const refreshTimer                        = useRef<NodeJS.Timeout | null>(null)
+export default function CopilotPanel({ position, onPositionUpdate }: Props) {
+  const [session,                setSession]                = useState<Session | null>(null)
+  const [analyzing,              setAnalyzing]              = useState(false)
+  const [loading,                setLoading]                = useState(true)
+  const [tick,                   setTick]                   = useState(0)
+  const [tiltDismissedAtRefresh, setTiltDismissedAtRefresh] = useState<number | null>(null)
+  const [demoTilt,               setDemoTilt]               = useState(false)
+  const [showCloseForm,          setShowCloseForm]          = useState(false)
+  const [exitPrice,              setExitPrice]              = useState('')
+  const [closing,                setClosing]                = useState(false)
+  const [closeError,             setCloseError]             = useState('')
+  const refreshTimer                                        = useRef<NodeJS.Timeout | null>(null)
 
-  // Current price + P&L derived from session or fallback
-  const currentPrice = session?.perspectives?.[0]?.rawOutput?.keyLevels?.vwap ?? position.entryPrice
-  const duration = Math.floor((Date.now() - new Date(position.openedAt).getTime()) / 60_000)
+  const isClosed = position.status === 'CLOSED'
 
   // ── load existing session ────────────────────────────────────────────────
   useEffect(() => {
@@ -200,12 +225,12 @@ export default function CopilotPanel({ position }: Props) {
 
   // ── 60-second auto-refresh while session is ACTIVE ──────────────────────
   useEffect(() => {
-    if (session?.status !== 'ACTIVE') return
+    if (session?.status !== 'ACTIVE' || isClosed) return
     refreshTimer.current = setInterval(() => { triggerRefresh() }, 60_000)
     return () => { if (refreshTimer.current) clearInterval(refreshTimer.current) }
-  }, [session?.status])
+  }, [session?.status, isClosed])
 
-  // ── tick every second for "X ago" label ──────────────────────────────────
+  // ── tick every second for elapsed labels ─────────────────────────────────
   useEffect(() => {
     const t = setInterval(() => setTick(n => n + 1), 1000)
     return () => clearInterval(t)
@@ -234,12 +259,61 @@ export default function CopilotPanel({ position }: Props) {
     }
   }, [position.id])
 
-  // ── perspective sort order ────────────────────────────────────────────────
+  async function handleClosePosition() {
+    const price = parseFloat(exitPrice)
+    if (!exitPrice || isNaN(price) || price <= 0) {
+      setCloseError('Enter a valid exit price.')
+      return
+    }
+    setCloseError('')
+    setClosing(true)
+    try {
+      const res = await fetch(`/api/positions/${position.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'CLOSED', exitPrice: price }),
+      })
+      const data = await res.json()
+      if (data.success) {
+        setShowCloseForm(false)
+        onPositionUpdate?.(data.data)
+      } else {
+        setCloseError(data.error || 'Failed to close position.')
+      }
+    } catch {
+      setCloseError('Network error — please try again.')
+    } finally {
+      setClosing(false)
+    }
+  }
+
+  // ── derived values ────────────────────────────────────────────────────────
   const perspectives = [...(session?.perspectives ?? [])].sort(
     (a, b) => (SIGNAL_ORDER[a.type] ?? 99) - (SIGNAL_ORDER[b.type] ?? 99)
   )
 
+  const techPerspective  = perspectives.find(p => p.type === 'TECHNICAL')
+  const analysisPrice    = techPerspective?.rawOutput?.keyLevels?.vwap ?? position.entryPrice
+  const hasPriceData     = session !== null && perspectives.length > 0
+  const pnlDollar        = position.side === 'LONG'
+    ? (analysisPrice - position.entryPrice) * position.quantity
+    : (position.entryPrice - analysisPrice) * position.quantity
+  const pnlPct           = position.side === 'LONG'
+    ? ((analysisPrice - position.entryPrice) / position.entryPrice) * 100
+    : ((position.entryPrice - analysisPrice) / position.entryPrice) * 100
+  const pnlPositive      = pnlDollar >= 0
+  const pnlColor         = pnlPositive ? 'var(--bull)' : 'var(--bear)'
+
   const overallStyle = OVERALL_SIGNAL_STYLE[session?.overallSignal ?? ''] ?? OVERALL_SIGNAL_STYLE['HOLD_POSITION']
+
+  // Behavioral state
+  const behavioralPerspective   = perspectives.find(p => p.type === 'BEHAVIORAL')
+  const psychState              = behavioralPerspective?.signal ?? null
+  const isTilt                  = psychState === 'TILT'
+  const isHighRisk              = psychState === 'HIGH_RISK' || psychState === 'EMOTIONALLY_COMPROMISED'
+  const currentRefresh          = session?.refreshCount ?? 0
+  const showTiltModal           = isTilt && (tiltDismissedAtRefresh === null || currentRefresh > tiltDismissedAtRefresh)
+  const behavioralData          = behavioralPerspective?.rawOutput as BehavioralRawOutput | undefined
 
   // ─────────────────────────────────────────────────────────────────────────
 
@@ -254,14 +328,38 @@ export default function CopilotPanel({ position }: Props) {
 
   return (
     <div>
+      {/* ── TILT Emergency Intervention Modal (real) ── */}
+      {showTiltModal && behavioralData && !demoTilt && (
+        <TiltInterventionModal
+          data={behavioralData}
+          symbol={position.symbol}
+          onDismiss={() => setTiltDismissedAtRefresh(currentRefresh)}
+          onStopTrading={() => setTiltDismissedAtRefresh(currentRefresh)}
+        />
+      )}
+
+      {/* ── TILT Demo Modal ── */}
+      {demoTilt && (
+        <TiltInterventionModal
+          data={DEMO_TILT_DATA}
+          symbol={position.symbol}
+          onDismiss={() => setDemoTilt(false)}
+          onStopTrading={() => setDemoTilt(false)}
+        />
+      )}
+
       {/* ── Position header ── */}
-      <div className="glass-card" style={{ padding: '16px 20px', marginBottom: '12px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
-          {/* Left: identity */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+      <div className="glass-card" style={{ padding: '18px 20px', marginBottom: '12px' }}>
+
+        {/* Row 1: Symbol + side + P&L + controls */}
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
+
+          {/* Left: identity + P&L */}
+          <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-start' }}>
+            {/* Symbol */}
             <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span style={{ fontSize: '18px', fontWeight: '800', color: 'var(--text-primary)', fontFamily: 'JetBrains Mono, monospace' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                <span style={{ fontSize: '20px', fontWeight: '800', color: 'var(--text-primary)', fontFamily: 'JetBrains Mono, monospace' }}>
                   {position.symbol}
                 </span>
                 <span style={{
@@ -272,17 +370,41 @@ export default function CopilotPanel({ position }: Props) {
                 }}>
                   {position.side}
                 </span>
+                {isClosed && (
+                  <span style={{ fontSize: '11px', fontWeight: '700', padding: '3px 8px', borderRadius: '5px', background: 'var(--bg-subtle)', color: 'var(--text-muted)', border: '1px solid var(--border-muted)' }}>
+                    CLOSED
+                  </span>
+                )}
               </div>
-              <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontFamily: 'JetBrains Mono, monospace', marginTop: '3px' }}>
+              <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontFamily: 'JetBrains Mono, monospace' }}>
                 Entry ${position.entryPrice.toFixed(2)}
-                {position.stopLoss && <span style={{ color: 'var(--bear)' }}> · Stop ${position.stopLoss.toFixed(2)}</span>}
+                {position.stopLoss   && <span style={{ color: 'var(--bear)' }}> · Stop ${position.stopLoss.toFixed(2)}</span>}
                 {position.targetPrice && <span style={{ color: 'var(--bull)' }}> · Target ${position.targetPrice.toFixed(2)}</span>}
               </div>
             </div>
+
+            {/* P&L block — only show when we have analysis data */}
+            {hasPriceData && (
+              <div style={{
+                padding: '8px 14px', borderRadius: '10px',
+                background: pnlPositive ? 'var(--bull-dim)' : 'var(--bear-dim)',
+                border: `1px solid ${pnlPositive ? 'rgba(34,197,94,0.2)' : 'rgba(239,68,68,0.2)'}`,
+              }}>
+                <div style={{ fontSize: '10px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '2px' }}>
+                  P&L (at analysis)
+                </div>
+                <div style={{ fontSize: '16px', fontWeight: '800', color: pnlColor, fontFamily: 'JetBrains Mono, monospace', lineHeight: 1 }}>
+                  {pnlPositive ? '+' : ''}{pnlDollar.toFixed(2)}
+                </div>
+                <div style={{ fontSize: '11px', fontWeight: '600', color: pnlColor, marginTop: '2px', fontFamily: 'JetBrains Mono, monospace' }}>
+                  {pnlPositive ? '+' : ''}{pnlPct.toFixed(2)}% · ${analysisPrice.toFixed(2)} VWAP
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Right: status + controls */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
             {session?.status === 'ACTIVE' && (
               <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '11px', color: 'var(--text-muted)', fontFamily: 'JetBrains Mono, monospace' }}>
                 <Clock size={11} />
@@ -304,7 +426,7 @@ export default function CopilotPanel({ position }: Props) {
               </div>
             )}
 
-            {!session && !analyzing && (
+            {!session && !analyzing && !isClosed && (
               <button className="btn-primary" onClick={startCopilot} style={{ gap: '6px' }}>
                 <Play size={13} /> Start Analysis
               </button>
@@ -312,19 +434,99 @@ export default function CopilotPanel({ position }: Props) {
 
             {session?.status === 'ACTIVE' && !analyzing && (
               <button className="btn-ghost" onClick={triggerRefresh} style={{ gap: '6px', padding: '6px 12px', fontSize: '12px' }}>
-                <RefreshCw size={12} /> Refresh Now
+                <RefreshCw size={12} /> Refresh
+              </button>
+            )}
+
+            {/* Demo TILT button — for hackathon presentation */}
+            <button
+              onClick={() => setDemoTilt(true)}
+              title="Demo: trigger TILT intervention modal"
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: '4px',
+                padding: '5px 10px', borderRadius: '7px',
+                border: '1px solid rgba(139,92,246,0.3)',
+                background: 'rgba(139,92,246,0.08)', color: 'var(--purple)',
+                fontSize: '11px', fontWeight: '600', cursor: 'pointer',
+                transition: 'all 0.15s ease',
+              }}
+            >
+              <Zap size={11} /> Demo TILT
+            </button>
+
+            {!isClosed && !showCloseForm && (
+              <button
+                onClick={() => { setShowCloseForm(true); setExitPrice(analysisPrice.toFixed(2)) }}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: '5px',
+                  padding: '6px 12px', borderRadius: '8px', border: '1px solid rgba(239,68,68,0.3)',
+                  background: 'var(--bear-dim)', color: 'var(--bear)',
+                  fontSize: '12px', fontWeight: '600', cursor: 'pointer',
+                  transition: 'all 0.15s ease',
+                }}
+              >
+                <X size={12} /> Close Trade
               </button>
             )}
           </div>
         </div>
 
-        {/* Trade stats row */}
-        <div style={{ display: 'flex', gap: '20px', marginTop: '12px', paddingTop: '12px', borderTop: '1px solid var(--border-muted)' }}>
+        {/* Close trade inline form */}
+        {showCloseForm && !isClosed && (
+          <div style={{
+            marginTop: '14px', paddingTop: '14px',
+            borderTop: '1px solid var(--border-muted)',
+            display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap',
+          }}>
+            <DollarSign size={13} color="var(--text-muted)" />
+            <span style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '600' }}>Exit Price</span>
+            <input
+              type="number"
+              step="any"
+              placeholder="Enter exit price"
+              value={exitPrice}
+              onChange={e => { setExitPrice(e.target.value); setCloseError('') }}
+              style={{
+                padding: '6px 10px', borderRadius: '7px', width: '140px',
+                background: 'var(--bg-subtle)', color: 'var(--text-primary)',
+                border: closeError ? '1px solid var(--bear)' : '1px solid var(--border-default)',
+                fontSize: '13px', fontFamily: 'JetBrains Mono, monospace', outline: 'none',
+              }}
+              autoFocus
+              onKeyDown={e => { if (e.key === 'Enter') handleClosePosition() }}
+            />
+            <button
+              onClick={handleClosePosition}
+              disabled={closing}
+              style={{
+                padding: '6px 14px', borderRadius: '7px',
+                background: 'var(--bear)', color: 'white', border: 'none',
+                fontSize: '12px', fontWeight: '700', cursor: closing ? 'not-allowed' : 'pointer',
+                opacity: closing ? 0.6 : 1,
+              }}
+            >
+              {closing ? 'Closing...' : 'Confirm Exit'}
+            </button>
+            <button
+              onClick={() => { setShowCloseForm(false); setCloseError('') }}
+              style={{ padding: '6px 12px', borderRadius: '7px', background: 'transparent', color: 'var(--text-muted)', border: '1px solid var(--border-muted)', fontSize: '12px', cursor: 'pointer' }}
+            >
+              Cancel
+            </button>
+            {closeError && <span style={{ fontSize: '12px', color: 'var(--bear)' }}>{closeError}</span>}
+          </div>
+        )}
+
+        {/* Row 2: trade stats */}
+        <div style={{
+          display: 'flex', gap: '20px', flexWrap: 'wrap',
+          marginTop: '14px', paddingTop: '12px', borderTop: '1px solid var(--border-muted)',
+        }}>
           {[
-            { label: 'Time in Trade', value: `${duration}m` },
-            { label: 'Qty', value: position.quantity.toString() },
-            { label: 'Refresh #', value: session ? `${session.refreshCount}` : '—' },
-            { label: 'Agents', value: session ? `${perspectives.length}/6` : '0/6' },
+            { label: 'Time in Trade',  value: timeInTrade(position.openedAt) },
+            { label: 'Quantity',       value: position.quantity.toString() },
+            { label: 'Refresh Count',  value: session ? `#${session.refreshCount}` : '—' },
+            { label: 'Agents',         value: session ? `${perspectives.length}/6` : '0/6' },
           ].map(s => (
             <div key={s.label}>
               <div style={{ fontSize: '10px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{s.label}</div>
@@ -335,7 +537,7 @@ export default function CopilotPanel({ position }: Props) {
       </div>
 
       {/* ── No session yet ── */}
-      {!session && !analyzing && (
+      {!session && !analyzing && !isClosed && (
         <div style={{
           display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
           padding: '60px 20px', gap: '12px',
@@ -343,7 +545,7 @@ export default function CopilotPanel({ position }: Props) {
           <Radio size={32} color="var(--text-muted)" />
           <div style={{ fontSize: '14px', fontWeight: '600', color: 'var(--text-primary)' }}>Copilot not started</div>
           <div style={{ fontSize: '12px', color: 'var(--text-muted)', textAlign: 'center', maxWidth: '320px' }}>
-            Click "Start Analysis" to fire all 6 AI agents simultaneously and get your live trading intelligence panel.
+            Click Start Analysis to fire all 6 AI agents simultaneously and get your live trading intelligence panel.
           </div>
           <button className="btn-primary" onClick={startCopilot} style={{ marginTop: '8px' }}>
             <Play size={13} /> Start Analysis
@@ -351,9 +553,16 @@ export default function CopilotPanel({ position }: Props) {
         </div>
       )}
 
+      {/* ── Closed position placeholder ── */}
+      {isClosed && !session && (
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '40px 20px', gap: '8px' }}>
+          <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>Position closed — no active copilot session.</div>
+        </div>
+      )}
+
       {/* ── Analyzing spinner ── */}
       {analyzing && perspectives.length === 0 && (
-        <div style={{ padding: '40px 0' }}>
+        <div style={{ padding: '32px 0' }}>
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px' }}>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px', width: '100%' }}>
               {Object.entries(PERSPECTIVE_META).map(([type, meta]) => (
@@ -363,8 +572,9 @@ export default function CopilotPanel({ position }: Props) {
                     <span style={{ fontSize: '11px', fontWeight: '700', color: meta.color, textTransform: 'uppercase', letterSpacing: '0.08em' }}>{meta.label}</span>
                   </div>
                   <div style={{ height: '8px', borderRadius: '4px', background: 'var(--bg-subtle)', overflow: 'hidden' }}>
-                    <div style={{ height: '100%', width: '60%', background: meta.color + '40', animation: 'shimmer 1.5s infinite' }} />
+                    <div className="skeleton" style={{ height: '100%', width: '100%' }} />
                   </div>
+                  <div className="skeleton" style={{ height: '32px', borderRadius: '4px', marginTop: '8px' }} />
                 </div>
               ))}
             </div>
@@ -372,6 +582,27 @@ export default function CopilotPanel({ position }: Props) {
               <RefreshCw size={12} style={{ animation: 'spin 1s linear infinite' }} />
               6 agents running in parallel — Azure GPT-4o · Claude · Grok · Perplexity
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── HIGH_RISK behavioral banner ── */}
+      {isHighRisk && !isTilt && behavioralData && (
+        <div style={{
+          display: 'flex', alignItems: 'flex-start', gap: '10px',
+          background: 'rgba(245,158,11,0.07)',
+          border: '1px solid rgba(245,158,11,0.25)',
+          borderRadius: '10px', padding: '12px 14px', marginBottom: '12px',
+          animation: 'slideIn 0.3s ease',
+        }}>
+          <AlertTriangle size={14} color="var(--warning)" style={{ flexShrink: 0, marginTop: '1px' }} />
+          <div>
+            <div style={{ fontSize: '11px', fontWeight: '700', color: 'var(--warning)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '3px' }}>
+              Behavioral Warning — {psychState?.replace(/_/g, ' ')}
+            </div>
+            <p style={{ fontSize: '12px', color: 'var(--text-secondary)', lineHeight: '1.6' }}>
+              {behavioralData.warningMessage || 'Your behavioral state is elevated. Review your plan before your next action.'}
+            </p>
           </div>
         </div>
       )}
@@ -391,8 +622,18 @@ export default function CopilotPanel({ position }: Props) {
           background: overallStyle.bg + '60',
         }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
-            <div style={{ fontSize: '11px', fontWeight: '700', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-              Copilot Consensus · {perspectives.length}/6 agents
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <div style={{ fontSize: '11px', fontWeight: '700', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                Copilot Consensus · {perspectives.length}/6 agents
+              </div>
+              <span style={{
+                fontSize: '10px', fontWeight: '700', padding: '2px 8px', borderRadius: '4px',
+                background: 'rgba(0,120,212,0.1)', color: '#0078D4',
+                border: '1px solid rgba(0,120,212,0.25)',
+                fontFamily: 'JetBrains Mono, monospace',
+              }}>
+                Azure GPT-4o
+              </span>
             </div>
             {session.overallSignal && (
               <span style={{
@@ -410,17 +651,17 @@ export default function CopilotPanel({ position }: Props) {
             {session.consensusSummary}
           </p>
 
-          <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: '24px', flexWrap: 'wrap' }}>
             {session.stopLossNote && (
               <div>
-                <div style={{ fontSize: '10px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '3px' }}>Stop Loss</div>
+                <div style={{ fontSize: '10px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '3px' }}>Stop Loss Note</div>
                 <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{session.stopLossNote}</div>
               </div>
             )}
             {session.nextDecisionLevel && (
               <div>
                 <div style={{ fontSize: '10px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '3px' }}>Next Decision At</div>
-                <div style={{ fontSize: '13px', fontWeight: '700', color: 'var(--text-primary)', fontFamily: 'JetBrains Mono, monospace' }}>
+                <div style={{ fontSize: '14px', fontWeight: '700', color: 'var(--text-primary)', fontFamily: 'JetBrains Mono, monospace' }}>
                   ${session.nextDecisionLevel.toFixed(2)}
                 </div>
               </div>

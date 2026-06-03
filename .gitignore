@@ -42,3 +42,8 @@ prisma/generated/
 # Logs
 logs/
 *.log
+.env.production.local
+.env.local.backup
+
+# Vercel
+.vercel

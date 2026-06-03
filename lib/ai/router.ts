@@ -1,5 +1,4 @@
 import { redis } from '../redis'
-import { callClaude } from './claude'
 import { callGrok } from './grok'
 import { callPerplexity } from './perplexity'
 import { callAzureOpenAI } from './azure-openai'
@@ -11,83 +10,69 @@ export type TaskType =
   | 'morning_brief'
   | 'hype_detection'
   | 'news_research'
-  | 'math_calculation' // V4: routes to GPT-o3
-  | 'deep_research'    // V4: routes to Gemini
+  | 'math_calculation'
+  | 'deep_research'
   | 'synthesis'
 
+// All AI tasks route through Azure OpenAI (or GitHub Models free fallback).
+// Grok and Perplexity are kept for social/news tasks but fall back to Azure if unavailable.
 export async function routeAITask(
   task: TaskType,
   prompt: string,
   options?: { maxTokens?: number; bypassCache?: boolean }
 ): Promise<string> {
-  // Generate cache key
-  const hash = crypto.createHash('sha256').update(prompt).digest('hex')
+  const hash     = crypto.createHash('sha256').update(prompt).digest('hex')
   const cacheKey = `ai:${task}:${hash}`
 
-  // Non-negotiable Rule 7: Caching
   if (!options?.bypassCache) {
     try {
       const cached = await redis.get(cacheKey)
-      if (cached) {
-        return cached as string
-      }
-    } catch (err) {
-      console.error('Redis Cache Get Error:', err)
+      if (cached) return cached as string
+    } catch {
+      // Redis unavailable — continue without cache
     }
   }
 
   let responseText = ''
 
   switch (task) {
-    case 'news_analysis':
-    case 'journal_reflection':
-    case 'morning_brief':
-    case 'synthesis':
-      responseText = await callClaude(prompt, options)
-      break
     case 'hype_detection':
-      responseText = await callGrok(prompt)
-      break
-    case 'news_research':
-      responseText = await callPerplexity(prompt)
-      break
-    case 'math_calculation':
-      // V4: replace with callGPTo3
-      responseText = await callClaude(prompt, options)
-      break
-    case 'deep_research':
-      // Azure OpenAI GPT-4o, fallback to Claude
+      // Grok for social/X sentiment — Azure fallback if Grok not configured
       try {
+        responseText = await callGrok(prompt)
+      } catch {
         responseText = await callAzureOpenAI(prompt, options)
-      } catch (azureErr) {
-        console.warn('Azure OpenAI unavailable, falling back to Claude:', azureErr)
-        responseText = await callClaude(prompt, options)
       }
       break
+
+    case 'news_research':
+      // Perplexity for verified news with citations — Azure fallback
+      try {
+        responseText = await callPerplexity(prompt)
+      } catch {
+        responseText = await callAzureOpenAI(prompt, options)
+      }
+      break
+
     default:
-      responseText = await callClaude(prompt, options)
+      // Everything else: Azure OpenAI GPT-4o (or GitHub Models free fallback)
+      responseText = await callAzureOpenAI(prompt, options)
+      break
   }
 
-  // Cache response if valid
   if (responseText) {
     try {
-      // Setup TTL based on task type or rules
-      let ttl = 60 * 15 // 15 mins default
-      
-      if (task === 'journal_reflection') {
-        ttl = 0 // Permanent
-      } else if (task === 'morning_brief') {
-        ttl = 60 * 60 * 24 // 24h
-      }
+      let ttl = 60 * 15 // 15 min default
+      if (task === 'journal_reflection') ttl = 0           // permanent
+      if (task === 'morning_brief')      ttl = 60 * 60 * 24 // 24h
 
       if (ttl > 0) {
         await redis.set(cacheKey, responseText, { ex: ttl })
       } else {
-        // Permanent
         await redis.set(cacheKey, responseText)
       }
-    } catch (err) {
-      console.error('Redis Cache Set Error:', err)
+    } catch {
+      // Redis unavailable — skip caching
     }
   }
 

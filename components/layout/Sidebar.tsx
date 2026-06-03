@@ -48,7 +48,7 @@ export default function Sidebar() {
               TradeGuard
             </div>
             <div style={{ fontSize: '10px', color: 'var(--text-muted)', fontFamily: 'JetBrains Mono, monospace', fontWeight: '600', letterSpacing: '0.1em' }}>
-              AI · V1
+              AI · V5
             </div>
           </div>
         </div>
@@ -86,19 +86,28 @@ export default function Sidebar() {
         })}
       </nav>
 
-      {/* Bottom hint */}
-      <div style={{ padding: '12px 16px', borderTop: '1px solid var(--border-muted)' }}>
+      {/* Bottom */}
+      <div style={{ padding: '12px 16px', borderTop: '1px solid var(--border-muted)', display: 'flex', flexDirection: 'column', gap: '8px' }}>
         <div style={{
           display: 'flex', alignItems: 'center', gap: '6px',
-          padding: '8px', borderRadius: '8px',
-          background: 'rgba(59,130,246,0.06)',
-          border: '1px solid rgba(59,130,246,0.12)',
+          padding: '7px 8px', borderRadius: '7px',
+          background: 'rgba(0,120,212,0.06)',
+          border: '1px solid rgba(0,120,212,0.15)',
         }}>
-          <Zap size={12} color="var(--accent-blue)" />
+          <Zap size={11} color="#0078D4" />
           <div>
-            <div style={{ fontSize: '11px', fontWeight: '600', color: 'var(--accent-blue)' }}>Prototype Mode</div>
-            <div style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Using mock data</div>
+            <div style={{ fontSize: '10px', fontWeight: '700', color: '#0078D4', fontFamily: 'JetBrains Mono, monospace' }}>Azure GPT-4o</div>
+            <div style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Responsible AI</div>
           </div>
+        </div>
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: '6px',
+          padding: '6px 8px', borderRadius: '7px',
+          background: 'rgba(245,158,11,0.06)',
+          border: '1px solid rgba(245,158,11,0.15)',
+        }}>
+          <span style={{ fontSize: '12px' }}>🇮🇳</span>
+          <div style={{ fontSize: '10px', color: 'var(--warning)', fontWeight: '600' }}>NSE · BSE Supported</div>
         </div>
       </div>
     </aside>

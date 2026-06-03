@@ -1,7 +1,7 @@
 "use client"
 
-import { useState } from 'react'
-import { X, TrendingUp, TrendingDown } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { X, TrendingUp, TrendingDown, AlertTriangle, Shield } from 'lucide-react'
 
 interface Props {
   onClose: () => void
@@ -9,17 +9,34 @@ interface Props {
 }
 
 const ASSET_CLASSES = ['STOCK', 'CRYPTO', 'FOREX', 'ETF']
+const PORTFOLIO_KEY = 'tradeguard_portfolio_value'
 
 export default function NewPositionModal({ onClose, onCreated }: Props) {
-  const [side, setSide]             = useState<'LONG' | 'SHORT'>('LONG')
-  const [symbol, setSymbol]         = useState('')
-  const [assetClass, setAssetClass] = useState('STOCK')
-  const [entryPrice, setEntryPrice] = useState('')
-  const [quantity, setQuantity]     = useState('')
-  const [stopLoss, setStopLoss]     = useState('')
-  const [targetPrice, setTarget]    = useState('')
-  const [loading, setLoading]       = useState(false)
-  const [error, setError]           = useState('')
+  const [side, setSide]               = useState<'LONG' | 'SHORT'>('LONG')
+  const [symbol, setSymbol]           = useState('')
+  const [assetClass, setAssetClass]   = useState('STOCK')
+  const [entryPrice, setEntryPrice]   = useState('')
+  const [quantity, setQuantity]       = useState('')
+  const [stopLoss, setStopLoss]       = useState('')
+  const [targetPrice, setTarget]      = useState('')
+  const [portfolioValue, setPortfolio] = useState('')
+  const [loading, setLoading]         = useState(false)
+  const [error, setError]             = useState('')
+
+  useEffect(() => {
+    const saved = localStorage.getItem(PORTFOLIO_KEY)
+    if (saved) setPortfolio(saved)
+  }, [])
+
+  // Risk calculation
+  const positionSize  = parseFloat(entryPrice) * parseFloat(quantity)
+  const portfolioNum  = parseFloat(portfolioValue)
+  const riskPct       = portfolioNum > 0 && positionSize > 0 ? (positionSize / portfolioNum) * 100 : null
+  const riskTooHigh   = riskPct !== null && riskPct > 5
+  const riskWarning   = riskPct !== null && riskPct > 2 && riskPct <= 5
+  const safeQty       = portfolioNum > 0 && parseFloat(entryPrice) > 0
+    ? Math.floor((portfolioNum * 0.02) / parseFloat(entryPrice))
+    : null
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -78,7 +95,7 @@ export default function NewPositionModal({ onClose, onCreated }: Props) {
             <div style={{ display: 'flex', gap: '8px' }}>
               {(['LONG', 'SHORT'] as const).map(s => (
                 <button key={s} type="button" onClick={() => setSide(s)} style={{
-                  flex: 1, padding: '10px', borderRadius: '8px', border: 'none',
+                  flex: 1, padding: '10px', borderRadius: '8px',
                   cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
                   fontSize: '13px', fontWeight: '700', transition: 'all 0.15s ease',
                   background: side === s
@@ -139,6 +156,44 @@ export default function NewPositionModal({ onClose, onCreated }: Props) {
                 value={targetPrice} onChange={e => setTarget(e.target.value)} />
             </div>
           </div>
+
+          {/* Portfolio value for risk calculation */}
+          <div style={{ marginBottom: '12px' }}>
+            <label style={{ fontSize: '11px', fontWeight: '600', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+              <Shield size={10} /> Portfolio Value (for risk check)
+            </label>
+            <input className="input-field" type="number" step="any" placeholder="e.g. 10000 (optional)"
+              value={portfolioValue}
+              onChange={e => { setPortfolio(e.target.value); localStorage.setItem(PORTFOLIO_KEY, e.target.value) }} />
+          </div>
+
+          {/* Risk warning */}
+          {riskPct !== null && (
+            <div style={{
+              display: 'flex', alignItems: 'flex-start', gap: '8px',
+              padding: '10px 12px', borderRadius: '8px', marginBottom: '12px',
+              background: riskTooHigh ? 'var(--bear-dim)' : riskWarning ? 'var(--warning-dim)' : 'var(--bull-dim)',
+              border: `1px solid ${riskTooHigh ? 'rgba(239,68,68,0.25)' : riskWarning ? 'rgba(245,158,11,0.25)' : 'rgba(34,197,94,0.2)'}`,
+            }}>
+              {riskTooHigh || riskWarning
+                ? <AlertTriangle size={13} color={riskTooHigh ? 'var(--bear)' : 'var(--warning)'} style={{ flexShrink: 0, marginTop: '1px' }} />
+                : <Shield size={13} color="var(--bull)" style={{ flexShrink: 0, marginTop: '1px' }} />
+              }
+              <div>
+                <div style={{ fontSize: '11px', fontWeight: '700', color: riskTooHigh ? 'var(--bear)' : riskWarning ? 'var(--warning)' : 'var(--bull)', marginBottom: '2px' }}>
+                  Position Risk: {riskPct.toFixed(1)}% of portfolio
+                  {riskTooHigh ? ' — HIGH RISK' : riskWarning ? ' — Elevated' : ' — Safe'}
+                </div>
+                <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
+                  {riskTooHigh
+                    ? `Professional traders risk max 1–2% per trade. ${safeQty !== null ? `Reduce to ${safeQty} shares for 2% risk.` : 'Reduce quantity.'}`
+                    : riskWarning
+                    ? `Above 2% threshold. Consider reducing.${safeQty !== null ? ` 2% risk = ${safeQty} shares.` : ''}`
+                    : 'Within safe risk parameters (under 2%). Good position sizing.'}
+                </div>
+              </div>
+            </div>
+          )}
 
           {error && (
             <div style={{ background: 'var(--bear-dim)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: '8px', padding: '10px 12px', fontSize: '12px', color: 'var(--bear)', marginBottom: '14px' }}>

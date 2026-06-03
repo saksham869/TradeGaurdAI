@@ -1,6 +1,5 @@
 import { Position } from '@prisma/client'
 import db from '../db'
-import { callClaude } from '../ai/claude'
 import { callGrok } from '../ai/grok'
 import { callPerplexity } from '../ai/perplexity'
 import { callAzureOpenAI } from '../ai/azure-openai'
@@ -142,18 +141,20 @@ export async function runCopilotAnalysis(sessionId: string, position: Position) 
     },
   })
 
-  // 9. Pusher — push to user's private channel so frontend updates instantly
+  // 9. Merge perspectives into session so frontend always receives a complete object
+  const sessionWithPerspectives = { ...updatedSession, perspectives }
+
   try {
     await pusherServer.trigger(
       `copilot-${position.id}`,
       'copilot-update',
-      { positionId: position.id, session: updatedSession, perspectives }
+      { positionId: position.id, session: sessionWithPerspectives }
     )
   } catch {
     // Non-blocking — UI will still get data on next poll
   }
 
-  return { session: updatedSession, perspectives }
+  return { session: sessionWithPerspectives, perspectives }
 }
 
 // =============================================================================
@@ -165,16 +166,16 @@ async function runTechnical(ctx: CopilotContext): Promise<string> {
   try {
     return await callAzureOpenAI(prompt)
   } catch {
-    return callClaude(prompt)
+    return callAzureOpenAI(prompt)
   }
 }
 
 async function runInstitutional(ctx: CopilotContext): Promise<string> {
-  return callClaude(COPILOT_PROMPTS.INSTITUTIONAL(ctx))
+  return callAzureOpenAI(COPILOT_PROMPTS.INSTITUTIONAL(ctx))
 }
 
 async function runDarkPool(ctx: CopilotContext): Promise<string> {
-  return callClaude(COPILOT_PROMPTS.DARK_POOL(ctx))
+  return callAzureOpenAI(COPILOT_PROMPTS.DARK_POOL(ctx))
 }
 
 async function runSocial(ctx: CopilotContext): Promise<string> {
@@ -185,11 +186,11 @@ async function runFundamental(ctx: CopilotContext): Promise<string> {
   const newsContext = await callPerplexity(COPILOT_PROMPTS.FUNDAMENTAL_NEWS(ctx)).catch(
     () => `No recent news found for ${ctx.symbol}.`
   )
-  return callClaude(COPILOT_PROMPTS.FUNDAMENTAL_SYNTHESIS(ctx, newsContext))
+  return callAzureOpenAI(COPILOT_PROMPTS.FUNDAMENTAL_SYNTHESIS(ctx, newsContext))
 }
 
 async function runBehavioral(ctx: BehavioralContext): Promise<string> {
-  return callClaude(COPILOT_PROMPTS.BEHAVIORAL(ctx))
+  return callAzureOpenAI(COPILOT_PROMPTS.BEHAVIORAL(ctx))
 }
 
 async function runConsensus(
@@ -199,7 +200,7 @@ async function runConsensus(
   const get = (type: string) =>
     parsed.find(p => p.type === type)?.summary ?? 'Unavailable'
 
-  return callClaude(
+  return callAzureOpenAI(
     COPILOT_PROMPTS.CONSENSUS(ctx, {
       technical:     get('TECHNICAL'),
       institutional: get('INSTITUTIONAL'),
