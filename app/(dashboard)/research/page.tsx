@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from 'react'
-import { Search, TrendingUp, TrendingDown, BarChart2, Activity, AlertTriangle, RefreshCw, Zap } from 'lucide-react'
+import { Search, TrendingUp, TrendingDown, BarChart2, Activity, AlertTriangle, RefreshCw, Zap, Database } from 'lucide-react'
 import AITransparencyBadge from '@/components/ui/AITransparencyBadge'
 
 const MARKET_GROUPS = [
@@ -33,6 +33,50 @@ const REC_STYLE: Record<string, { color: string; bg: string; border: string }> =
   WAIT:                 { color: 'var(--warning)',      bg: 'var(--warning-dim)',     border: 'rgba(245,158,11,0.25)' },
   HIGH_RISK:            { color: 'var(--bear)',         bg: 'var(--bear-dim)',        border: 'rgba(239,68,68,0.25)'  },
   STRONG_AVOID:         { color: 'var(--bear)',         bg: 'var(--bear-dim)',        border: 'rgba(239,68,68,0.25)'  },
+}
+
+// ─── Foundry IQ citation badge strip ─────────────────────────────────────────
+
+function FoundryIQPanel({ foundryIQ }: { foundryIQ?: { available: boolean; citations: string[]; resultCount: number } }) {
+  if (!foundryIQ?.available) return (
+    <div style={{
+      display: 'inline-flex', alignItems: 'center', gap: '5px',
+      padding: '3px 9px', borderRadius: '5px', marginBottom: '8px',
+      background: 'var(--bg-subtle)', border: '1px solid var(--border-muted)',
+    }}>
+      <Database size={10} color="var(--text-muted)" />
+      <span style={{ fontSize: '10px', color: 'var(--text-muted)', fontFamily: 'JetBrains Mono, monospace' }}>
+        Foundry IQ not configured — add AZURE_SEARCH_ENDPOINT to .env
+      </span>
+    </div>
+  )
+
+  return (
+    <div style={{ marginBottom: '8px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+        <div style={{
+          display: 'inline-flex', alignItems: 'center', gap: '5px',
+          padding: '3px 10px', borderRadius: '5px',
+          background: 'rgba(0,120,212,0.1)', border: '1px solid rgba(0,120,212,0.25)',
+        }}>
+          <Database size={10} color="#0078D4" />
+          <span style={{ fontSize: '10px', fontWeight: '700', color: '#0078D4', fontFamily: 'JetBrains Mono, monospace' }}>
+            Azure Foundry IQ · {foundryIQ.resultCount} docs retrieved
+          </span>
+        </div>
+        {foundryIQ.citations.map((c, i) => (
+          <span key={i} style={{
+            fontSize: '10px', padding: '2px 8px', borderRadius: '4px',
+            background: 'rgba(0,120,212,0.07)', color: '#0078D4',
+            border: '1px solid rgba(0,120,212,0.18)',
+            fontFamily: 'JetBrains Mono, monospace',
+          }}>
+            [{i + 1}] {c}
+          </span>
+        ))}
+      </div>
+    </div>
+  )
 }
 
 function AnalysisPanel({ symbol, data }: { symbol: string; data: any }) {
@@ -148,21 +192,46 @@ function AnalysisPanel({ symbol, data }: { symbol: string; data: any }) {
         </div>
       )}
 
-      {/* Synthesis */}
-      <div className="glass-card" style={{ padding: '14px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+      {/* Synthesis + Foundry IQ */}
+      <div className="glass-card" style={{ padding: '16px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
           <div style={{ fontSize: '10px', fontWeight: '700', color: 'var(--text-muted)', letterSpacing: '0.1em', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '5px' }}>
             <Zap size={11} /> AI Synthesis — Azure GPT-4o
           </div>
           <AITransparencyBadge
             model="Azure OpenAI GPT-4o"
-            task="Multi-agent research synthesis — Technical + News + Retail Trap → unified verdict"
-            inputSummary={`Ticker: ${symbol} · Live price from Yahoo Finance · Perplexity news research · 3 parallel Claude analyses`}
+            task="Multi-agent synthesis grounded by Azure AI Foundry IQ knowledge retrieval"
+            inputSummary={`Ticker: ${symbol} · Live Yahoo Finance price · Perplexity news · 3 Claude agent analyses · ${data.foundryIQ?.available ? `${data.foundryIQ.resultCount} Foundry IQ docs retrieved` : 'Foundry IQ not configured'}`}
           />
         </div>
-        <p style={{ fontSize: '13px', color: 'var(--text-primary)', lineHeight: '1.7' }}>
+
+        {/* Foundry IQ grounding strip */}
+        <FoundryIQPanel foundryIQ={data.foundryIQ} />
+
+        <p style={{ fontSize: '13px', color: 'var(--text-primary)', lineHeight: '1.7', marginBottom: data.foundryIQ?.available ? '12px' : '0' }}>
           {data.synthesis?.summary ?? data.synthesis?.recommendationReason ?? '—'}
         </p>
+
+        {/* Citation badges */}
+        {data.foundryIQ?.available && data.foundryIQ.citations.length > 0 && (
+          <div style={{ paddingTop: '10px', borderTop: '1px solid var(--border-muted)' }}>
+            <div style={{ fontSize: '10px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '5px' }}>
+              <Database size={10} /> Grounded by Azure AI Foundry IQ · financial-knowledge index
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+              {data.foundryIQ.citations.map((c: string, i: number) => (
+                <span key={i} style={{
+                  fontSize: '11px', padding: '3px 10px', borderRadius: '5px',
+                  background: 'rgba(0,120,212,0.08)', color: '#0078D4',
+                  border: '1px solid rgba(0,120,212,0.2)',
+                  fontFamily: 'JetBrains Mono, monospace', fontWeight: '600',
+                }}>
+                  [{i + 1}] {c}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )
@@ -209,6 +278,7 @@ export default function ResearchPage() {
           technicalRead:       d.technicalRead,
           retailTrapAnalysis:  d.retailTrapAnalysis,
           synthesis:           d.synthesis,
+          foundryIQ:           d.foundryIQ,
         })
       } else {
         setError(json.error || `Could not load analysis for ${s}.`)

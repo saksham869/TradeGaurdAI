@@ -2,6 +2,7 @@ import { getYahooQuote, formatVolume, formatMarketCap } from '../data/yahoo'
 import { callPerplexity } from '../ai/perplexity'
 import { routeAITask } from '../ai/router'
 import { PROMPTS } from '../ai/prompts'
+import { retrieveFinancialKnowledge } from '../ai/foundry-search'
 
 export async function analyzeTickerParallel(symbol: string) {
   try {
@@ -101,39 +102,56 @@ export async function analyzeTickerParallel(symbol: string) {
     const techObj = parseSafe(techRes)
     const trapObj = parseSafe(trapRes)
 
-    // Step 3: Final synthesis — routed to Azure OpenAI GPT-4o via deep_research
+    // Step 3: Azure AI Foundry IQ — knowledge retrieval BEFORE synthesis
+    // 3-second timeout so it never blocks the research pipeline
+    const foundryQuery = `${symbol} ${techObj.technicalBias ?? ''} ${trapObj.trapType ?? ''} trading analysis`
+    const foundryTimeout = new Promise<{ available: false; results: []; citations: []; contextBlock: '' }>(
+      resolve => setTimeout(() => resolve({ available: false, results: [], citations: [], contextBlock: '' }), 3000)
+    )
+    const foundry = await Promise.race([
+      retrieveFinancialKnowledge(foundryQuery),
+      foundryTimeout,
+    ])
+
+    // Step 4: Synthesis — Azure GPT-4o receives grounded context from Foundry IQ
     const synthesisRes = await routeAITask('deep_research', PROMPTS.TICKER_SYNTHESIS({
       symbol,
-      currentPrice: priceData.price,
-      newsScore: newsObj.sentimentScore ?? 50,
-      technicalBias: techObj.technicalBias ?? 'NEUTRAL',
-      trapWarning: trapObj.retailMistake || 'None identified',
-      trapActive: trapObj.trapActive || false,
+      currentPrice:  priceData.price,
+      newsScore:     newsObj.sentimentScore ?? 50,
+      technicalBias: techObj.technicalBias  ?? 'NEUTRAL',
+      trapWarning:   trapObj.retailMistake  || 'None identified',
+      trapActive:    trapObj.trapActive     || false,
+      foundryContext: foundry.available ? foundry.contextBlock : undefined,
     })).catch(() => '{}')
 
     const synthesisObj = parseSafe(synthesisRes)
 
     return {
-      newsImpact: newsObj,
-      technicalRead: techObj,
-      retailTrapAnalysis: trapObj,
-      synthesis: synthesisObj,
-      priceAtAnalysis: priceData.price,
-      // Extra market info for the UI
+      newsImpact:          newsObj,
+      technicalRead:       techObj,
+      retailTrapAnalysis:  trapObj,
+      synthesis:           synthesisObj,
+      priceAtAnalysis:     priceData.price,
+      // Foundry IQ grounding data — passed through to UI
+      foundryIQ: {
+        available:  foundry.available,
+        citations:  foundry.citations,
+        resultCount: foundry.results.length,
+      },
       marketInfo: {
-        name: priceData.name,
-        exchange: priceData.exchange,
-        currency: priceData.currency,
+        name:            priceData.name,
+        exchange:        priceData.exchange,
+        currency:        priceData.currency,
         currencySymbol,
-        market: priceData.market,
-        change: quote?.change ?? 0,
-        changePct: priceData.changePct,
-        high: priceData.high,
-        low: priceData.low,
-        volume: priceData.volumeStr,
-        marketCap: priceData.marketCapStr,
+        market:          priceData.market,
+        change:          quote?.change ?? 0,
+        changePct:       priceData.changePct,
+        high:            priceData.high,
+        low:             priceData.low,
+        volume:          priceData.volumeStr,
+        marketCap:       priceData.marketCapStr,
         fiftyTwoWeekHigh: quote?.fiftyTwoWeekHigh,
-        fiftyTwoWeekLow: quote?.fiftyTwoWeekLow,
+        fiftyTwoWeekLow:  quote?.fiftyTwoWeekLow,
       },
     }
 

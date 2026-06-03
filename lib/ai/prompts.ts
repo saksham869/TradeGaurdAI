@@ -123,12 +123,22 @@ trapType: FOMO_ENTRY|PANIC_SELL|HYPE_CHASE|REVENGE_BUY|DEAD_CAT_BOUNCE|NONE
 warningLevel: NONE|CAUTION|HIGH|CRITICAL`,
 
   TICKER_SYNTHESIS: (p: {
-    symbol: string; currentPrice: number; newsScore: number;
-    technicalBias: string; trapWarning: string; trapActive: boolean;
-  }) => `Synthesize 3 analyses of ${p.symbol} into final retail trader recommendation.
+    symbol:        string
+    currentPrice:  number
+    newsScore:     number
+    technicalBias: string
+    trapWarning:   string
+    trapActive:    boolean
+    foundryContext?: string   // grounded knowledge from Azure AI Foundry IQ
+  }) => `You are the TradeGuard AI synthesis engine. Produce the final recommendation for ${p.symbol}.
 
-Price:$${p.currentPrice} | News:${p.newsScore}/100
-Technical:${p.technicalBias} | Trap Active:${p.trapActive}
+${p.foundryContext ? `VERIFIED KNOWLEDGE BASE (Azure AI Foundry IQ — financial-knowledge index):
+${p.foundryContext}
+
+Based on the above verified sources and the following live agent analysis:` : 'Based on the following live agent analysis:'}
+
+Price:$${p.currentPrice} | News Sentiment:${p.newsScore}/100
+Technical Bias:${p.technicalBias} | Retail Trap Active:${p.trapActive}
 Trap Warning: ${p.trapWarning}
 
 Return ONLY valid JSON. No markdown. No code fences.
@@ -136,12 +146,13 @@ Return ONLY valid JSON. No markdown. No code fences.
   "overallSentiment": 50,
   "overallLabel": "NEUTRAL",
   "recommendation": "PROCEED_WITH_CAUTION",
-  "recommendationReason": "2 sentences.",
+  "recommendationReason": "2 sentences grounded in both the knowledge base and live data.",
   "topBullCase": "1 sentence.",
   "topBearCase": "1 sentence.",
   "keyWatchLevel": ${p.currentPrice},
   "keyWatchNote": "Why this level matters.",
-  "timeframe": "INTRADAY_ONLY"
+  "timeframe": "INTRADAY_ONLY",
+  "groundedBy": ${p.foundryContext ? '"Azure AI Foundry IQ"' : 'null'}
 }
 recommendation: STRONG_AVOID|HIGH_RISK|PROCEED_WITH_CAUTION|FAVORABLE
 timeframe: AVOID_TODAY|WAIT_FOR_SETUP|INTRADAY_ONLY|SWING_POTENTIAL`,
