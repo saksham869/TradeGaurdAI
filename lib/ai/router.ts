@@ -2,6 +2,7 @@ import { redis } from '../redis'
 import { callGrok } from './grok'
 import { callPerplexity } from './perplexity'
 import { callAzureOpenAI } from './azure-openai'
+import { callClaude } from './claude'
 import crypto from 'crypto'
 
 export type TaskType =
@@ -13,6 +14,42 @@ export type TaskType =
   | 'math_calculation'
   | 'deep_research'
   | 'synthesis'
+
+export type ActiveModelName =
+  | 'azure-gpt-4o'
+  | 'github-gpt-4o'
+  | 'claude-sonnet'
+  | 'grok'
+  | 'perplexity'
+
+// The model that the default (OpenAI-compatible) path will actually use,
+// based on which keys are configured. Mirrors the order in callAzureOpenAI.
+export function getOpenAIProviderName(): ActiveModelName {
+  const azureConfigured =
+    process.env.AZURE_OPENAI_ENDPOINT &&
+    process.env.AZURE_OPENAI_API_KEY &&
+    process.env.AZURE_OPENAI_DEPLOYMENT_NAME
+  if (azureConfigured) return 'azure-gpt-4o'
+  return 'github-gpt-4o'
+}
+
+// Returns the real model string for what will actually run for a task,
+// given the keys configured right now. Every stored or rendered model
+// label must come from here — never hardcode a model name.
+export function getActiveModelName(task: TaskType): ActiveModelName {
+  const claudeConfigured = !!process.env.ANTHROPIC_API_KEY
+  switch (task) {
+    case 'journal_reflection':
+    case 'synthesis':
+      return claudeConfigured ? 'claude-sonnet' : getOpenAIProviderName()
+    case 'hype_detection':
+      return process.env.XAI_API_KEY ? 'grok' : getOpenAIProviderName()
+    case 'news_research':
+      return process.env.PERPLEXITY_API_KEY ? 'perplexity' : getOpenAIProviderName()
+    default:
+      return getOpenAIProviderName()
+  }
+}
 
 // All AI tasks route through Azure OpenAI (or GitHub Models free fallback).
 // Grok and Perplexity are kept for social/news tasks but fall back to Azure if unavailable.
@@ -36,6 +73,20 @@ export async function routeAITask(
   let responseText = ''
 
   switch (task) {
+    case 'journal_reflection':
+    case 'synthesis':
+      // Claude for reflective and synthesis tasks when key is present
+      if (process.env.ANTHROPIC_API_KEY) {
+        try {
+          responseText = await callClaude(prompt, options)
+        } catch {
+          responseText = await callAzureOpenAI(prompt, options)
+        }
+      } else {
+        responseText = await callAzureOpenAI(prompt, options)
+      }
+      break
+
     case 'hype_detection':
       // Grok for social/X sentiment — Azure fallback if Grok not configured
       try {

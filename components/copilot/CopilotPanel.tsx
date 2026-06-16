@@ -36,6 +36,7 @@ interface Session {
   id: string; status: string; refreshCount: number
   overallSignal: string | null; consensusSummary: string | null
   stopLossNote: string | null; nextDecisionLevel: number | null
+  currentPrice: number | null
   lastRefreshedAt: string | null
   perspectives: Perspective[]
 }
@@ -95,6 +96,15 @@ function timeInTrade(openedAt: string): string {
   const h = Math.floor(sec / 3600)
   const m = Math.floor((sec % 3600) / 60)
   return m > 0 ? `${h}h ${m}m` : `${h}h`
+}
+
+// A persisted price older than this is considered stale — P&L shows "—" rather
+// than a number that no longer reflects the market.
+const STALE_PRICE_MS = 5 * 60_000
+
+function clockTime(iso: string | null): string {
+  if (!iso) return '—'
+  return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })
 }
 
 // ─── Perspective card ──────────────────────────────────────────────────────
@@ -292,16 +302,25 @@ export default function CopilotPanel({ position, onPositionUpdate }: Props) {
     (a, b) => (SIGNAL_ORDER[a.type] ?? 99) - (SIGNAL_ORDER[b.type] ?? 99)
   )
 
-  const techPerspective  = perspectives.find(p => p.type === 'TECHNICAL')
-  const analysisPrice    = techPerspective?.rawOutput?.keyLevels?.vwap ?? position.entryPrice
+  // Live P&L from the price the service captured at analysis time. null/≤0 means
+  // Yahoo was unavailable; a price older than STALE_PRICE_MS is treated as stale.
+  // In either case P&L renders "—" instead of a misleading number.
+  const priceAsOf        = session?.lastRefreshedAt ?? null
+  const priceStale       = priceAsOf ? (Date.now() - new Date(priceAsOf).getTime()) > STALE_PRICE_MS : true
+  const livePrice        = session?.currentPrice != null && session.currentPrice > 0 ? session.currentPrice : null
+  const hasLivePrice     = livePrice !== null && !priceStale
   const hasPriceData     = session !== null && perspectives.length > 0
-  const pnlDollar        = position.side === 'LONG'
-    ? (analysisPrice - position.entryPrice) * position.quantity
-    : (position.entryPrice - analysisPrice) * position.quantity
-  const pnlPct           = position.side === 'LONG'
-    ? ((analysisPrice - position.entryPrice) / position.entryPrice) * 100
-    : ((position.entryPrice - analysisPrice) / position.entryPrice) * 100
-  const pnlPositive      = pnlDollar >= 0
+  const pnlDollar        = hasLivePrice
+    ? (position.side === 'LONG'
+        ? (livePrice! - position.entryPrice) * position.quantity
+        : (position.entryPrice - livePrice!) * position.quantity)
+    : null
+  const pnlPct           = hasLivePrice
+    ? (position.side === 'LONG'
+        ? ((livePrice! - position.entryPrice) / position.entryPrice) * 100
+        : ((position.entryPrice - livePrice!) / position.entryPrice) * 100)
+    : null
+  const pnlPositive      = (pnlDollar ?? 0) >= 0
   const pnlColor         = pnlPositive ? 'var(--bull)' : 'var(--bear)'
 
   const overallStyle = OVERALL_SIGNAL_STYLE[session?.overallSignal ?? ''] ?? OVERALL_SIGNAL_STYLE['HOLD_POSITION']
@@ -387,18 +406,38 @@ export default function CopilotPanel({ position, onPositionUpdate }: Props) {
             {hasPriceData && (
               <div style={{
                 padding: '8px 14px', borderRadius: '10px',
-                background: pnlPositive ? 'var(--bull-dim)' : 'var(--bear-dim)',
-                border: `1px solid ${pnlPositive ? 'rgba(34,197,94,0.2)' : 'rgba(239,68,68,0.2)'}`,
+                background: hasLivePrice ? (pnlPositive ? 'var(--bull-dim)' : 'var(--bear-dim)') : 'var(--bg-subtle)',
+                border: `1px solid ${hasLivePrice ? (pnlPositive ? 'rgba(34,197,94,0.2)' : 'rgba(239,68,68,0.2)') : 'var(--border-muted)'}`,
               }}>
-                <div style={{ fontSize: '10px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '2px' }}>
-                  P&L (at analysis)
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '2px' }}>
+                  <span style={{ fontSize: '10px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                    P&L
+                  </span>
+                  {hasLivePrice && (
+                    <span style={{ fontSize: '9px', color: 'var(--text-muted)', fontFamily: 'JetBrains Mono, monospace' }}>
+                      as of {clockTime(priceAsOf)}
+                    </span>
+                  )}
                 </div>
-                <div style={{ fontSize: '16px', fontWeight: '800', color: pnlColor, fontFamily: 'JetBrains Mono, monospace', lineHeight: 1 }}>
-                  {pnlPositive ? '+' : ''}{pnlDollar.toFixed(2)}
-                </div>
-                <div style={{ fontSize: '11px', fontWeight: '600', color: pnlColor, marginTop: '2px', fontFamily: 'JetBrains Mono, monospace' }}>
-                  {pnlPositive ? '+' : ''}{pnlPct.toFixed(2)}% · ${analysisPrice.toFixed(2)} VWAP
-                </div>
+                {hasLivePrice ? (
+                  <>
+                    <div style={{ fontSize: '16px', fontWeight: '800', color: pnlColor, fontFamily: 'JetBrains Mono, monospace', lineHeight: 1 }}>
+                      {pnlPositive ? '+' : ''}{pnlDollar!.toFixed(2)}
+                    </div>
+                    <div style={{ fontSize: '11px', fontWeight: '600', color: pnlColor, marginTop: '2px', fontFamily: 'JetBrains Mono, monospace' }}>
+                      {pnlPositive ? '+' : ''}{pnlPct!.toFixed(2)}% · ${livePrice!.toFixed(2)}
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div style={{ fontSize: '16px', fontWeight: '800', color: 'var(--text-muted)', fontFamily: 'JetBrains Mono, monospace', lineHeight: 1 }}>
+                      —
+                    </div>
+                    <div style={{ fontSize: '11px', fontWeight: '600', color: 'var(--text-muted)', marginTop: '2px' }}>
+                      Live price unavailable
+                    </div>
+                  </>
+                )}
               </div>
             )}
           </div>
@@ -456,7 +495,7 @@ export default function CopilotPanel({ position, onPositionUpdate }: Props) {
 
             {!isClosed && !showCloseForm && (
               <button
-                onClick={() => { setShowCloseForm(true); setExitPrice(analysisPrice.toFixed(2)) }}
+                onClick={() => { setShowCloseForm(true); setExitPrice((livePrice ?? position.entryPrice).toFixed(2)) }}
                 style={{
                   display: 'inline-flex', alignItems: 'center', gap: '5px',
                   padding: '6px 12px', borderRadius: '8px', border: '1px solid rgba(239,68,68,0.3)',

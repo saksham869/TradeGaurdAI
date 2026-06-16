@@ -113,8 +113,8 @@ export async function analyzeTickerParallel(symbol: string) {
       foundryTimeout,
     ])
 
-    // Step 4: Synthesis — Azure GPT-4o receives grounded context from Foundry IQ
-    const synthesisRes = await routeAITask('deep_research', PROMPTS.TICKER_SYNTHESIS({
+    // Step 4: Synthesis — routes to Claude when ANTHROPIC_API_KEY set, else Azure
+    const synthesisRes = await routeAITask('synthesis', PROMPTS.TICKER_SYNTHESIS({
       symbol,
       currentPrice:  priceData.price,
       newsScore:     newsObj.sentimentScore ?? 50,

@@ -3,9 +3,15 @@ import db from '../db'
 import { callGrok } from '../ai/grok'
 import { callPerplexity } from '../ai/perplexity'
 import { callAzureOpenAI } from '../ai/azure-openai'
+import { callClaude } from '../ai/claude'
 import { getYahooQuote } from '../data/yahoo'
 import { pusherServer } from '../pusher-server'
 import { COPILOT_PROMPTS, CopilotContext, BehavioralContext } from '../ai/copilot-prompts'
+import { getActiveModelName, getOpenAIProviderName } from '../ai/router'
+
+// Every agent reports the model that actually produced its output —
+// including fallbacks — so stored labels are always truthful.
+type AgentOutput = { text: string; model: string }
 
 // =============================================================================
 // Public entry point — called by start and refresh routes
@@ -23,7 +29,10 @@ export async function runCopilotAnalysis(sessionId: string, position: Position) 
     console.warn(`Yahoo Finance unavailable for ${position.symbol} — using entry price`)
   }
 
-  const currentPrice = priceData?.price ?? position.entryPrice
+  // livePrice is the real market price (null if Yahoo was unavailable) — used for
+  // P&L display so a fallback never produces a misleading number.
+  const livePrice = priceData?.price ?? null
+  const currentPrice = livePrice ?? position.entryPrice
   const pnlPct =
     position.side === 'LONG'
       ? ((currentPrice - position.entryPrice) / position.entryPrice) * 100
@@ -83,17 +92,18 @@ export async function runCopilotAnalysis(sessionId: string, position: Position) 
     ])
 
   const agentResults = [
-    { type: 'TECHNICAL',     result: techResult,   model: 'azure-gpt-4o'      },
-    { type: 'INSTITUTIONAL', result: instResult,   model: 'claude-3-5-sonnet' },
-    { type: 'DARK_POOL',     result: dpResult,     model: 'claude-3-5-sonnet' },
-    { type: 'SOCIAL',        result: socialResult, model: 'grok-beta'         },
-    { type: 'FUNDAMENTAL',   result: fundResult,   model: 'perplexity+claude' },
-    { type: 'BEHAVIORAL',    result: behavResult,  model: 'claude-3-5-sonnet' },
+    { type: 'TECHNICAL',     result: techResult   },
+    { type: 'INSTITUTIONAL', result: instResult   },
+    { type: 'DARK_POOL',     result: dpResult     },
+    { type: 'SOCIAL',        result: socialResult },
+    { type: 'FUNDAMENTAL',   result: fundResult   },
+    { type: 'BEHAVIORAL',    result: behavResult  },
   ]
 
-  // 5. Parse each agent response
-  const parsed = agentResults.map(({ type, result, model }) => {
-    const raw = result.status === 'fulfilled' ? result.value : ''
+  // 5. Parse each agent response — model label comes from the agent itself
+  const parsed = agentResults.map(({ type, result }) => {
+    const raw   = result.status === 'fulfilled' ? result.value.text  : ''
+    const model = result.status === 'fulfilled' ? result.value.model : getOpenAIProviderName()
     const data = parseSafe(raw)
     return {
       type,
@@ -137,6 +147,7 @@ export async function runCopilotAnalysis(sessionId: string, position: Position) 
       consensusSummary:  consensus.consensusSummary  ?? null,
       stopLossNote:      consensus.stopLossNote       ?? null,
       nextDecisionLevel: consensus.nextDecisionLevel  ?? null,
+      currentPrice:      livePrice,
       lastRefreshedAt:   new Date(),
     },
   })
@@ -161,36 +172,41 @@ export async function runCopilotAnalysis(sessionId: string, position: Position) 
 // Individual agent runners
 // =============================================================================
 
-async function runTechnical(ctx: CopilotContext): Promise<string> {
-  const prompt = COPILOT_PROMPTS.TECHNICAL(ctx)
+async function runTechnical(ctx: CopilotContext): Promise<AgentOutput> {
+  const text = await callAzureOpenAI(COPILOT_PROMPTS.TECHNICAL(ctx))
+  return { text, model: getOpenAIProviderName() }
+}
+
+async function runInstitutional(ctx: CopilotContext): Promise<AgentOutput> {
+  const text = await callAzureOpenAI(COPILOT_PROMPTS.INSTITUTIONAL(ctx))
+  return { text, model: getOpenAIProviderName() }
+}
+
+async function runDarkPool(ctx: CopilotContext): Promise<AgentOutput> {
+  const text = await callAzureOpenAI(COPILOT_PROMPTS.DARK_POOL(ctx))
+  return { text, model: getOpenAIProviderName() }
+}
+
+async function runSocial(ctx: CopilotContext): Promise<AgentOutput> {
+  const prompt = COPILOT_PROMPTS.SOCIAL(ctx)
   try {
-    return await callAzureOpenAI(prompt)
+    return { text: await callGrok(prompt), model: 'grok' }
   } catch {
-    return callAzureOpenAI(prompt)
+    return { text: await callAzureOpenAI(prompt), model: getOpenAIProviderName() }
   }
 }
 
-async function runInstitutional(ctx: CopilotContext): Promise<string> {
-  return callAzureOpenAI(COPILOT_PROMPTS.INSTITUTIONAL(ctx))
-}
-
-async function runDarkPool(ctx: CopilotContext): Promise<string> {
-  return callAzureOpenAI(COPILOT_PROMPTS.DARK_POOL(ctx))
-}
-
-async function runSocial(ctx: CopilotContext): Promise<string> {
-  return callGrok(COPILOT_PROMPTS.SOCIAL(ctx))
-}
-
-async function runFundamental(ctx: CopilotContext): Promise<string> {
+async function runFundamental(ctx: CopilotContext): Promise<AgentOutput> {
   const newsContext = await callPerplexity(COPILOT_PROMPTS.FUNDAMENTAL_NEWS(ctx)).catch(
     () => `No recent news found for ${ctx.symbol}.`
   )
-  return callAzureOpenAI(COPILOT_PROMPTS.FUNDAMENTAL_SYNTHESIS(ctx, newsContext))
+  const text = await callAzureOpenAI(COPILOT_PROMPTS.FUNDAMENTAL_SYNTHESIS(ctx, newsContext))
+  return { text, model: getOpenAIProviderName() }
 }
 
-async function runBehavioral(ctx: BehavioralContext): Promise<string> {
-  return callAzureOpenAI(COPILOT_PROMPTS.BEHAVIORAL(ctx))
+async function runBehavioral(ctx: BehavioralContext): Promise<AgentOutput> {
+  const text = await callAzureOpenAI(COPILOT_PROMPTS.BEHAVIORAL(ctx))
+  return { text, model: getOpenAIProviderName() }
 }
 
 async function runConsensus(
@@ -200,16 +216,24 @@ async function runConsensus(
   const get = (type: string) =>
     parsed.find(p => p.type === type)?.summary ?? 'Unavailable'
 
-  return callAzureOpenAI(
-    COPILOT_PROMPTS.CONSENSUS(ctx, {
-      technical:     get('TECHNICAL'),
-      institutional: get('INSTITUTIONAL'),
-      darkPool:      get('DARK_POOL'),
-      social:        get('SOCIAL'),
-      fundamental:   get('FUNDAMENTAL'),
-      behavioral:    get('BEHAVIORAL'),
-    })
-  )
+  const prompt = COPILOT_PROMPTS.CONSENSUS(ctx, {
+    technical:     get('TECHNICAL'),
+    institutional: get('INSTITUTIONAL'),
+    darkPool:      get('DARK_POOL'),
+    social:        get('SOCIAL'),
+    fundamental:   get('FUNDAMENTAL'),
+    behavioral:    get('BEHAVIORAL'),
+  })
+
+  // Claude is the 7th (consensus) agent when configured — synthesises across all 6
+  if (process.env.ANTHROPIC_API_KEY) {
+    try {
+      return await callClaude(prompt)
+    } catch {
+      return callAzureOpenAI(prompt)
+    }
+  }
+  return callAzureOpenAI(prompt)
 }
 
 // =============================================================================
