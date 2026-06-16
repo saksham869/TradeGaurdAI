@@ -8,7 +8,9 @@
     "start": "next start",
     "lint": "next lint",
     "postinstall": "prisma generate",
+    "seed": "tsx prisma/seed.ts",
     "seed:index": "tsx scripts/seed-financial-index.ts",
+    "smoke": "tsx scripts/smoke.ts",
     "test": "vitest run"
   },
   "dependencies": {
