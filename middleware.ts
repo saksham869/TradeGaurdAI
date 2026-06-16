@@ -1,15 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
 
-// Simple in-memory rate limiter (resets per cold start on Vercel Edge)
-// For production scale: replace with Upstash Redis + @upstash/ratelimit
+// ── Rate limiter (in-memory; resets per cold start) ─────────────────────────
 const rateLimitMap = new Map<string, { count: number; resetAt: number }>()
 
 const RATE_LIMITS: Record<string, { max: number; windowMs: number }> = {
-  '/api/research': { max: 20,  windowMs: 60_000 },  // 20 research calls / min
-  '/api/prices':   { max: 60,  windowMs: 60_000 },  // 60 price calls / min
-  '/api/journal':  { max: 30,  windowMs: 60_000 },  // 30 journal ops / min
-  '/api/positions':{ max: 60,  windowMs: 60_000 },  // 60 position ops / min
-  '/api/impact':   { max: 100, windowMs: 60_000 },  // 100 impact calls / min
+  '/api/research': { max: 20,  windowMs: 60_000 },
+  '/api/prices':   { max: 60,  windowMs: 60_000 },
+  '/api/journal':  { max: 30,  windowMs: 60_000 },
+  '/api/positions':{ max: 60,  windowMs: 60_000 },
+  '/api/impact':   { max: 100, windowMs: 60_000 },
 }
 
 function getClientId(req: NextRequest): string {
@@ -23,48 +23,62 @@ function getClientId(req: NextRequest): string {
 function checkRateLimit(clientId: string, route: string): boolean {
   const limit = Object.entries(RATE_LIMITS).find(([prefix]) => route.startsWith(prefix))
   if (!limit) return true
-
   const { max, windowMs } = limit[1]
   const key   = `${clientId}:${limit[0]}`
   const now   = Date.now()
   const entry = rateLimitMap.get(key)
-
   if (!entry || now > entry.resetAt) {
     rateLimitMap.set(key, { count: 1, resetAt: now + windowMs })
     return true
   }
-
   if (entry.count >= max) return false
   entry.count++
   return true
 }
 
-export function middleware(request: NextRequest) {
+function applySecurityHeaders(response: NextResponse): NextResponse {
+  response.headers.set('X-Content-Type-Options', 'nosniff')
+  response.headers.set('X-Frame-Options', 'DENY')
+  response.headers.set('X-XSS-Protection', '1; mode=block')
+  return response
+}
+
+// ── Public routes (never need Clerk auth) ────────────────────────────────────
+const isPublicRoute = createRouteMatcher([
+  '/',                          // Landing page
+  '/sign-in(.*)',
+  '/sign-up(.*)',
+  '/api/webhooks/(.*)',         // Clerk + Razorpay webhooks
+  '/api/cron(.*)',              // Cron endpoints self-protect via Bearer token
+])
+
+// ── Combined middleware ───────────────────────────────────────────────────────
+// When CLERK_SECRET_KEY is present: Clerk handles auth for dashboard/API routes.
+// Without the key (dev/preview): only rate limiting + security headers run.
+
+export default clerkMiddleware((auth, request) => {
   const { pathname } = request.nextUrl
   const clientId     = getClientId(request)
 
-  // ── Rate limiting ────────────────────────────────────────────────────────
+  // Rate limiting
   if (pathname.startsWith('/api/') && !checkRateLimit(clientId, pathname)) {
     return new NextResponse(
       JSON.stringify({ success: false, error: 'Too many requests. Please wait.' }),
       {
         status: 429,
         headers: {
-          'Content-Type':     'application/json',
-          'Retry-After':      '60',
-          'X-RateLimit-Info': 'Rate limit exceeded',
+          'Content-Type': 'application/json',
+          'Retry-After':  '60',
         },
       }
     )
   }
 
-  // ── Block cron routes from non-Vercel callers ────────────────────────────
+  // Cron auth check
   if (pathname.startsWith('/api/cron/')) {
     const authHeader = request.headers.get('Authorization')
     const cronSecret = process.env.CRON_SECRET
-    // Allow Vercel's cron system (it sends the CRON_SECRET) and skip in dev
     if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
-      // Allow only if it looks like a legitimate Vercel cron caller
       const isVercelCron = request.headers.get('x-vercel-cron') === '1'
       if (!isVercelCron) {
         return new NextResponse(
@@ -75,18 +89,17 @@ export function middleware(request: NextRequest) {
     }
   }
 
-  // ── Add security headers to every response ───────────────────────────────
-  const response = NextResponse.next()
-  response.headers.set('X-Content-Type-Options', 'nosniff')
-  response.headers.set('X-Frame-Options',        'DENY')
-  response.headers.set('X-XSS-Protection',       '1; mode=block')
+  // Clerk route protection — only when key is configured and route is protected
+  if (process.env.CLERK_SECRET_KEY && !isPublicRoute(request)) {
+    auth().protect()
+  }
 
-  return response
-}
+  return applySecurityHeaders(NextResponse.next())
+})
 
 export const config = {
   matcher: [
-    // Run on all routes except static files and Next.js internals
     '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    '/(api|trpc)(.*)',
   ],
 }
