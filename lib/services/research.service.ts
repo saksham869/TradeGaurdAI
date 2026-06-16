@@ -147,6 +147,7 @@ export async function analyzeTickerParallel(symbol: string) {
         currency:        priceData.currency,
         currencySymbol,
         market:          priceData.market,
+        yahooSymbol:     quote?.yahooSymbol ?? symbol,
         change:          quote?.change ?? 0,
         changePct:       priceData.changePct,
         high:            priceData.high,

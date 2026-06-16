@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { Search, TrendingUp, TrendingDown, BarChart2, Activity, AlertTriangle, RefreshCw, Zap, Database } from 'lucide-react'
 import AITransparencyBadge from '@/components/ui/AITransparencyBadge'
+import MarketStatusBadge from '@/components/shared/MarketStatusBadge'
 
 const MARKET_GROUPS = [
   { flag: '🇺🇸', label: 'US Stocks',  color: 'var(--accent-blue)', tickers: ['AAPL', 'NVDA', 'TSLA', 'META', 'MSFT', 'AMZN', 'GOOGL'] },
@@ -94,6 +95,7 @@ function AnalysisPanel({ symbol, data }: { symbol: string; data: any }) {
           <span style={{ fontSize: '13px', fontWeight: '600', color: 'var(--text-secondary)' }}>{mi.name || symbol}</span>
           <span style={{ fontSize: '10px', padding: '2px 7px', background: 'var(--bg-subtle)', color: 'var(--accent-blue)', border: '1px solid rgba(59,130,246,0.2)', borderRadius: '4px', fontFamily: 'JetBrains Mono, monospace', fontWeight: '700' }}>{mi.exchange || '—'}</span>
           <span style={{ fontSize: '10px', padding: '2px 7px', background: 'var(--bg-subtle)', color: 'var(--text-muted)', borderRadius: '4px', fontFamily: 'JetBrains Mono, monospace' }}>{mi.currency || 'USD'}</span>
+          {mi.yahooSymbol && <MarketStatusBadge yahooSymbol={mi.yahooSymbol} />}
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
