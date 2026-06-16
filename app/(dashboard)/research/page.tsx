@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { Search, TrendingUp, TrendingDown, BarChart2, Activity, AlertTriangle, RefreshCw, Zap, Database } from 'lucide-react'
 import AITransparencyBadge from '@/components/ui/AITransparencyBadge'
 import MarketStatusBadge from '@/components/shared/MarketStatusBadge'
+import ShareButton from '@/components/shared/ShareButton'
 
 const MARKET_GROUPS = [
   { flag: '🇺🇸', label: 'US Stocks',  color: 'var(--accent-blue)', tickers: ['AAPL', 'NVDA', 'TSLA', 'META', 'MSFT', 'AMZN', 'GOOGL'] },
@@ -213,9 +214,14 @@ function AnalysisPanel({ symbol, data }: { symbol: string; data: any }) {
         {/* Foundry IQ grounding strip */}
         <FoundryIQPanel foundryIQ={data.foundryIQ} />
 
-        <p style={{ fontSize: '13px', color: 'var(--text-primary)', lineHeight: '1.7', marginBottom: data.foundryIQ?.available ? '12px' : '0' }}>
+        <p style={{ fontSize: '13px', color: 'var(--text-primary)', lineHeight: '1.7', marginBottom: '10px' }}>
           {data.synthesis?.summary ?? data.synthesis?.recommendationReason ?? '—'}
         </p>
+
+        <ShareButton
+          text={`${symbol} — ${data.synthesis?.overallLabel ?? 'Analysis'}\n${data.synthesis?.recommendationReason ?? ''}\nTechnical: ${data.technicalRead?.technicalBias ?? '—'}`}
+          label="WhatsApp"
+        />
 
         {/* Citation badges */}
         {data.foundryIQ?.available && data.foundryIQ.citations.length > 0 && (

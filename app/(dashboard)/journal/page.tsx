@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from 'react'
-import { BookOpen, Brain, Calendar, Tag, AlertTriangle, RefreshCw } from 'lucide-react'
+import { BookOpen, Brain, Calendar, Tag, AlertTriangle, RefreshCw, Flame } from 'lucide-react'
 import AITransparencyBadge from '@/components/ui/AITransparencyBadge'
 
 // ─── types ────────────────────────────────────────────────────────────────────
@@ -221,9 +221,24 @@ export default function JournalPage() {
 
   return (
     <div>
-      <div style={{ marginBottom: '24px' }}>
-        <h1 style={{ fontSize: '20px', fontWeight: '700', color: 'var(--text-primary)', marginBottom: '4px' }}>Trading Journal</h1>
-        <p style={{ fontSize: '13px', color: 'var(--text-muted)' }}>Log your thoughts · Azure GPT-4o detects behavioral patterns · Build trading discipline</p>
+      <div style={{ marginBottom: '24px', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
+        <div>
+          <h1 style={{ fontSize: '20px', fontWeight: '700', color: 'var(--text-primary)', marginBottom: '4px' }}>Trading Journal</h1>
+          <p style={{ fontSize: '13px', color: 'var(--text-muted)' }}>Log your thoughts · AI detects behavioral patterns · Build trading discipline</p>
+        </div>
+        {profile.streak > 0 && (
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: '8px',
+            padding: '10px 16px', borderRadius: '10px',
+            background: 'rgba(251,146,60,0.1)', border: '1px solid rgba(251,146,60,0.3)',
+          }}>
+            <Flame size={20} color="#fb923c" />
+            <div>
+              <div style={{ fontSize: '22px', fontWeight: '800', fontFamily: 'JetBrains Mono, monospace', color: '#fb923c', lineHeight: 1 }}>{profile.streak}d</div>
+              <div style={{ fontSize: '10px', color: 'var(--text-muted)', marginTop: '2px' }}>Streak · Best: {profile.streak}d</div>
+            </div>
+          </div>
+        )}
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '320px 1fr', gap: '20px', alignItems: 'start' }}>
