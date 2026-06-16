@@ -5,6 +5,37 @@ import { callAzureOpenAI } from './azure-openai'
 import { callClaude } from './claude'
 import crypto from 'crypto'
 
+const AI_BUDGET_KEY = () => `ai:budget:${new Date().toISOString().slice(0, 10)}`
+const AI_BUDGET_TTL = 90_000 // 25h
+
+/**
+ * Increment the global daily AI call counter.
+ * Returns true when the budget is NOT exceeded (request can proceed).
+ * Returns false when the budget is exceeded → caller should degrade to cached-only.
+ */
+export async function checkAndIncrAIBudget(): Promise<boolean> {
+  const budget = parseInt(process.env.AI_DAILY_CALL_BUDGET ?? '5000', 10)
+  try {
+    const key   = AI_BUDGET_KEY()
+    const count = await redis?.incr(key)
+    if (count === 1) await redis?.expire(key, AI_BUDGET_TTL)
+    return count == null || count <= budget
+  } catch {
+    return true // Redis unavailable — allow through
+  }
+}
+
+export async function getAIBudgetStatus(): Promise<{ used: number; budget: number; exceeded: boolean }> {
+  const budget = parseInt(process.env.AI_DAILY_CALL_BUDGET ?? '5000', 10)
+  try {
+    const raw  = await redis?.get(AI_BUDGET_KEY())
+    const used = typeof raw === 'number' ? raw : 0
+    return { used, budget, exceeded: used >= budget }
+  } catch {
+    return { used: 0, budget, exceeded: false }
+  }
+}
+
 export type TaskType =
   | 'news_analysis'
   | 'journal_reflection'
@@ -68,6 +99,14 @@ export async function routeAITask(
     } catch {
       // Redis unavailable — continue without cache
     }
+  }
+
+  // Global daily budget guard — degrade gracefully rather than hard-crash
+  const withinBudget = await checkAndIncrAIBudget()
+  if (!withinBudget) {
+    // Return a cached-only placeholder; routes that rely on caching will find
+    // a prior result; routes that don't will receive this sentinel.
+    throw new Error('AI_BUDGET_EXCEEDED')
   }
 
   let responseText = ''

@@ -4,6 +4,8 @@ import { getUserId } from '@/lib/auth'
 import { runCopilotAnalysis } from '@/lib/services/copilot.service'
 import { assertWithinPlan, PlanLimitError } from '@/lib/gating'
 
+const MAX_CONCURRENT_COPILOT = 3
+
 // POST /api/positions/[id]/copilot/start
 // Creates a CopilotSession for the position and runs the first 6-agent analysis.
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
@@ -35,6 +37,24 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       )
     }
 
+    // Enforce 3 concurrent active copilot sessions max
+    const activeSessions = await db.copilotSession.count({
+      where: {
+        status: 'ACTIVE',
+        position: { userId, status: 'OPEN' },
+      },
+    })
+
+    if (activeSessions >= MAX_CONCURRENT_COPILOT) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: `You can monitor at most ${MAX_CONCURRENT_COPILOT} positions simultaneously. Close another copilot session first.`,
+        },
+        { status: 429 }
+      )
+    }
+
     // Idempotent — return existing session if already active
     const existing = await db.copilotSession.findUnique({
       where: { positionId: params.id },
@@ -58,9 +78,23 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     })
 
     // Run all 6 agents — writes CopilotPerspective rows and updates session consensus
-    const result = await runCopilotAnalysis(session.id, position)
-
-    return NextResponse.json({ success: true, data: result }, { status: 201 })
+    try {
+      const result = await runCopilotAnalysis(session.id, position)
+      return NextResponse.json({ success: true, data: result }, { status: 201 })
+    } catch (err) {
+      if (err instanceof Error && err.message === 'AI_BUDGET_EXCEEDED') {
+        return NextResponse.json(
+          {
+            success: true,
+            data: { session: { ...session, perspectives: [] } },
+            degraded: true,
+            degradedReason: 'AI analysis unavailable — daily budget reached. Cached data only until tomorrow.',
+          },
+          { status: 201 }
+        )
+      }
+      throw err
+    }
   } catch (error) {
     console.error('Copilot Start Error:', error)
     return NextResponse.json({ success: false, error: 'Failed to start copilot session' }, { status: 500 })

@@ -3,6 +3,7 @@ import db from '@/lib/db'
 import { processJournalEntry } from '@/lib/services/journal.service'
 import { getUserId } from '@/lib/auth'
 import { checkContentSafety } from '@/lib/ai/azure-content-safety'
+import { assertWithinPlan, PlanLimitError } from '@/lib/gating'
 
 export async function GET() {
   const userId = await getUserId()
@@ -22,6 +23,15 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   const userId = await getUserId()
   if (!userId) return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 })
+
+  try {
+    await assertWithinPlan(userId, 'journal:post')
+  } catch (e) {
+    if (e instanceof PlanLimitError) {
+      return NextResponse.json({ success: false, error: e.message, upgrade: true }, { status: 402 })
+    }
+    throw e
+  }
 
   try {
     const { rawText, symbol } = await request.json()
@@ -47,12 +57,32 @@ export async function POST(request: NextRequest) {
       },
     })
 
-    // Synch processing for V1
-    await processJournalEntry(userId, entry.id, rawText, symbol)
+    // AI processing — degrade gracefully when daily budget is exhausted
+    let degraded = false
+    try {
+      await processJournalEntry(userId, entry.id, rawText, symbol)
+    } catch (err) {
+      if (err instanceof Error && err.message === 'AI_BUDGET_EXCEEDED') {
+        degraded = true
+        await db.journalEntry.update({
+          where: { id: entry.id },
+          data: { processingStatus: 'pending' },
+        })
+      } else {
+        throw err
+      }
+    }
 
     const updatedEntry = await db.journalEntry.findUnique({ where: { id: entry.id } })
 
-    return NextResponse.json({ success: true, data: updatedEntry || entry })
+    return NextResponse.json({
+      success: true,
+      data: updatedEntry || entry,
+      ...(degraded && {
+        degraded: true,
+        degradedReason: 'AI analysis unavailable — daily budget reached. Your entry is saved and will be processed tomorrow.',
+      }),
+    })
   } catch (error) {
      console.error('Journal Create Error:', error)
      return NextResponse.json({ success: false, error: 'Failed to save journal' }, { status: 500 })
