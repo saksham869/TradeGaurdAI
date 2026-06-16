@@ -1,9 +1,11 @@
 "use client"
 
 import { useState } from 'react'
-import { Settings, Key, Bell, Shield, Database, Palette, ChevronRight, Check, Eye, EyeOff } from 'lucide-react'
+import { Settings, Key, Bell, Shield, Database, Palette, ChevronRight, Check, Eye, EyeOff, CreditCard, Zap } from 'lucide-react'
+import UpgradeModal from '@/components/billing/UpgradeModal'
 
 const SECTIONS = [
+  { id: 'billing', label: 'Plan & Billing', icon: CreditCard },
   { id: 'api', label: 'API Keys', icon: Key },
   { id: 'notifications', label: 'Notifications', icon: Bell },
   { id: 'appearance', label: 'Appearance', icon: Palette },
@@ -103,8 +105,9 @@ function Toggle({ label, description, defaultOn = false }: { label: string, desc
 }
 
 export default function SettingsPage() {
-  const [activeSection, setActiveSection] = useState('api')
+  const [activeSection, setActiveSection] = useState('billing')
   const [theme, setTheme] = useState('dark')
+  const [upgradeOpen, setUpgradeOpen] = useState(false)
 
   return (
     <div style={{ maxWidth: '860px' }}>
@@ -123,6 +126,52 @@ export default function SettingsPage() {
 
         {/* Content */}
         <div className="glass-card" style={{ padding: '24px' }}>
+          {activeSection === 'billing' && (
+            <>
+              <div style={{ marginBottom: '20px' }}>
+                <h2 style={{ fontSize: '15px', fontWeight: '700', color: 'var(--text-primary)', marginBottom: '4px' }}>Plan & Billing</h2>
+                <p style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Manage your TradeGuard AI subscription.</p>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '20px' }}>
+                {/* FREE plan */}
+                <div style={{ padding: '16px', borderRadius: '10px', border: '1px solid var(--border-default)', background: 'var(--bg-subtle)' }}>
+                  <div style={{ fontSize: '12px', fontWeight: '700', color: 'var(--text-muted)', marginBottom: '6px' }}>FREE</div>
+                  <div style={{ fontSize: '20px', fontWeight: '700', fontFamily: 'JetBrains Mono, monospace', marginBottom: '10px' }}>₹0<span style={{ fontSize: '11px', fontWeight: '400', color: 'var(--text-muted)', marginLeft: '4px' }}>/month</span></div>
+                  {['5 watchlist symbols', '5 research/day', 'Journal unlimited', 'No Copilot'].map(f => (
+                    <div key={f} style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '5px' }}>· {f}</div>
+                  ))}
+                </div>
+                {/* PRO plan */}
+                <div style={{ padding: '16px', borderRadius: '10px', border: '1px solid rgba(59,130,246,0.3)', background: 'rgba(59,130,246,0.05)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '12px', fontWeight: '700', color: 'var(--accent-blue)', marginBottom: '6px' }}>
+                    <Zap size={11} /> PRO
+                  </div>
+                  <div style={{ fontSize: '20px', fontWeight: '700', fontFamily: 'JetBrains Mono, monospace', marginBottom: '10px' }}>₹499<span style={{ fontSize: '11px', fontWeight: '400', color: 'var(--text-muted)', marginLeft: '4px' }}>/month</span></div>
+                  {['Unlimited watchlist', 'Unlimited research', 'Live Copilot', 'Mind Engine V7'].map(f => (
+                    <div key={f} style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '5px', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                      <Check size={10} color="var(--bull)" /> {f}
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <button
+                onClick={() => setUpgradeOpen(true)}
+                style={{
+                  width: '100%', padding: '12px', background: 'var(--accent-blue)',
+                  color: '#fff', border: 'none', borderRadius: '8px', fontSize: '14px',
+                  fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center',
+                  justifyContent: 'center', gap: '8px',
+                }}
+              >
+                <Zap size={15} /> Upgrade to PRO — ₹499/month
+              </button>
+              <p style={{ fontSize: '11px', color: 'var(--text-muted)', textAlign: 'center', marginTop: '10px' }}>
+                Educational analysis, not investment advice. Cancel anytime via Razorpay.
+              </p>
+              <UpgradeModal open={upgradeOpen} onClose={() => setUpgradeOpen(false)} />
+            </>
+          )}
+
           {activeSection === 'api' && (
             <>
               <div style={{ marginBottom: '20px' }}>

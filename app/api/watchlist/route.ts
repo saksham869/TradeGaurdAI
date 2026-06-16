@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import db from '@/lib/db'
 import { getUserId } from '@/lib/auth'
+import { assertWithinPlan, PlanLimitError } from '@/lib/gating'
 
 export async function GET() {
   const userId = await getUserId()
@@ -25,6 +26,16 @@ export async function POST(request: NextRequest) {
     if (!symbol) return NextResponse.json({ success: false, error: 'Symbol required' }, { status: 400 })
 
     const ticker = symbol.toUpperCase()
+
+    // Plan gate — check before duplicate so the error message is accurate
+    try {
+      await assertWithinPlan(userId, 'watchlist:add')
+    } catch (e) {
+      if (e instanceof PlanLimitError) {
+        return NextResponse.json({ success: false, error: e.message, upgrade: true }, { status: 402 })
+      }
+      throw e
+    }
 
     // Check if duplicate
     const existing = await db.watchlistItem.findFirst({

@@ -1,10 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { analyzeTickerParallel } from '@/lib/services/research.service'
 import { getUserId } from '@/lib/auth'
+import { assertWithinPlan, PlanLimitError } from '@/lib/gating'
 
 export async function GET(request: NextRequest, { params }: { params: { symbol: string } }) {
   const userId = await getUserId()
   if (!userId) return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 })
+
+  try {
+    await assertWithinPlan(userId, 'research:run')
+  } catch (e) {
+    if (e instanceof PlanLimitError) {
+      return NextResponse.json({ success: false, error: e.message, upgrade: true }, { status: 402 })
+    }
+    throw e
+  }
 
   try {
     const symbol = params.symbol.toUpperCase()

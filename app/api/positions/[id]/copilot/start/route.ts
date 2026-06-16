@@ -2,12 +2,22 @@ import { NextRequest, NextResponse } from 'next/server'
 import db from '@/lib/db'
 import { getUserId } from '@/lib/auth'
 import { runCopilotAnalysis } from '@/lib/services/copilot.service'
+import { assertWithinPlan, PlanLimitError } from '@/lib/gating'
 
 // POST /api/positions/[id]/copilot/start
 // Creates a CopilotSession for the position and runs the first 6-agent analysis.
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
   const userId = await getUserId()
   if (!userId) return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 })
+
+  try {
+    await assertWithinPlan(userId, 'copilot:open')
+  } catch (e) {
+    if (e instanceof PlanLimitError) {
+      return NextResponse.json({ success: false, error: e.message, upgrade: true }, { status: 402 })
+    }
+    throw e
+  }
 
   try {
     const position = await db.position.findFirst({

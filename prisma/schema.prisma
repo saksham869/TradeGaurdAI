@@ -85,7 +85,10 @@ model User {
   name         String?
   timezone     String          @default("America/New_York")
   currency     String          @default("USD")
-  plan         Plan            @default(FREE)
+  plan              Plan            @default(FREE)
+  razorpayCustomerId String?
+  razorpaySubId      String?
+  planUpdatedAt      DateTime?
   onboarded    Boolean         @default(false)
   createdAt    DateTime        @default(now())
   updatedAt    DateTime        @updatedAt
