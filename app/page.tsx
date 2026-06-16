@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { Brain, Shield, TrendingUp, AlertTriangle, Zap, Globe, ArrowRight, Radio, BookOpen, Search } from 'lucide-react'
+import { useRouter } from 'next/navigation'
+import { Brain, Shield, TrendingUp, AlertTriangle, Zap, Globe, ArrowRight, Radio, BookOpen, Search, Check, X } from 'lucide-react'
 
 interface ImpactStats {
   journals:     number
@@ -53,14 +54,32 @@ const FEATURES = [
 
 const MARKETS = ['🇺🇸 US Stocks', '🇮🇳 India NSE/BSE', '₿ Crypto', '💱 Forex', '🪙 Commodities', '🌏 Global ETFs']
 
+const FAQ_ITEMS = [
+  { q: 'Does TradeGuard AI give trading tips or signals?', a: 'No. TradeGuard AI provides educational analysis — it helps you understand what might be happening and flag behavioral risks. It never tells you to buy or sell, and it never places trades on your behalf.' },
+  { q: 'Can I trust the AI analysis?', a: 'Every AI response is labeled with the model that actually produced it. Every statistic shows its sample size (e.g. "58% (n=31)"). We never fabricate numbers. When data is insufficient, we say so.' },
+  { q: 'Does it work for Indian markets (NSE/BSE)?', a: 'Yes. Just type any NSE ticker (RELIANCE, TCS, HDFCBANK) — the app resolves it to the correct .NS Yahoo Finance symbol automatically. Prices show in ₹ with Indian digit grouping.' },
+  { q: 'What happens when I reach my FREE plan limit?', a: 'You see an upgrade prompt with the exact limit and current usage. No silent degradation, no hidden paywalls mid-analysis.' },
+  { q: 'Is my journal data private?', a: 'Journal text is processed by AI for behavioral analysis, then stored in your private account. It is never used for advertising or shared with third parties. Each entry is screened by Azure Content Safety.' },
+]
+
 export default function LandingPage() {
-  const [stats, setStats] = useState<ImpactStats | null>(null)
+  const [stats,    setStats]    = useState<ImpactStats | null>(null)
+  const [openFAQ,  setOpenFAQ]  = useState<number | null>(null)
+  const router = useRouter()
 
   useEffect(() => {
     fetch('/api/impact')
       .then(r => r.json())
       .then(d => { if (d.success) setStats(d.data) })
   }, [])
+
+  // Signed-in users go directly to /feed
+  useEffect(() => {
+    fetch('/api/auth/me')
+      .then(r => r.json())
+      .then(d => { if (d.success && d.userId) router.replace('/feed') })
+      .catch(() => null)
+  }, [router])
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg-base)', color: 'var(--text-primary)', fontFamily: 'Inter, sans-serif' }}>
@@ -116,7 +135,7 @@ export default function LandingPage() {
         }}>
           <AlertTriangle size={13} color="var(--bear)" />
           <span style={{ fontSize: '12px', fontWeight: '700', color: 'var(--bear)', letterSpacing: '0.04em' }}>
-            90% of retail traders lose money in year one
+            9 in 10 retail traders lose money — SEBI, 2024
           </span>
         </div>
 
@@ -127,15 +146,15 @@ export default function LandingPage() {
           background: 'linear-gradient(135deg, #e8edf5 0%, #7a8fa6 100%)',
           WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
         }}>
-          Every retail trader<br />is alone in the room.
+          9 out of 10 traders<br />lose money.<br />We built the AI that tells<br />you why you&apos;ll be the 10th.
         </h1>
 
-        <p style={{ fontSize: '20px', color: 'var(--text-secondary)', lineHeight: '1.7', maxWidth: '680px', margin: '0 auto 16px', fontWeight: '400' }}>
-          Institutions have 50 analysts, quant models, and real-time AI feeds.
-          Retail traders have a chart and a gut feeling.
+        <p style={{ fontSize: '16px', color: 'var(--text-muted)', lineHeight: 1.6, maxWidth: '560px', margin: '0 auto 12px' }}>
+          SEBI&apos;s own data: 89% of F&O retail traders lost money in FY2023-24.
+          The biggest predictor of loss isn&apos;t bad analysis — it&apos;s behavioral bias you can&apos;t see in yourself.
         </p>
         <p style={{ fontSize: '20px', color: 'var(--accent-blue)', lineHeight: '1.7', maxWidth: '680px', margin: '0 auto 48px', fontWeight: '700' }}>
-          TradeGuard AI puts 6 specialized Azure AI agents next to every retail trader — on every trade, in real time.
+          TradeGuard AI puts 6 specialized AI agents next to every retail trader — on every trade, in real time.
         </p>
 
         {/* CTA buttons */}
@@ -373,13 +392,90 @@ export default function LandingPage() {
             fontSize: '16px', fontWeight: '700', cursor: 'pointer',
             boxShadow: '0 8px 32px rgba(59,130,246,0.3)',
           }}>
-            Enter TradeGuard AI <ArrowRight size={18} />
+            Start Free — No Credit Card <ArrowRight size={18} />
           </button>
         </Link>
-        <div style={{ marginTop: '32px', fontSize: '12px', color: 'var(--text-muted)' }}>
-          Microsoft AI Agents Hackathon 2025 · Built with Azure OpenAI · Responsible AI
+      </section>
+
+      {/* ── Pricing ── */}
+      <section style={{ padding: '80px 48px', background: 'var(--bg-surface)', borderTop: '1px solid var(--border-muted)' }}>
+        <div style={{ maxWidth: '800px', margin: '0 auto' }}>
+          <div style={{ textAlign: 'center', marginBottom: '48px' }}>
+            <div style={{ fontSize: '12px', fontWeight: '700', color: 'var(--accent-blue)', textTransform: 'uppercase', letterSpacing: '0.12em', marginBottom: '10px' }}>Pricing</div>
+            <h2 style={{ fontSize: '32px', fontWeight: '800', marginBottom: '10px' }}>Simple. Transparent. No tricks.</h2>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+            {/* FREE */}
+            <div style={{ padding: '28px', borderRadius: '16px', border: '1px solid var(--border-default)', background: 'var(--bg-card)' }}>
+              <div style={{ fontSize: '13px', fontWeight: '700', color: 'var(--text-muted)', marginBottom: '8px' }}>FREE</div>
+              <div style={{ fontSize: '36px', fontWeight: '900', fontFamily: 'JetBrains Mono, monospace', marginBottom: '20px' }}>₹0<span style={{ fontSize: '14px', fontWeight: '400', color: 'var(--text-muted)', marginLeft: '6px' }}>/month</span></div>
+              {['5 watchlist symbols', '5 AI research queries/day', 'Journal — unlimited', 'Streak + PsychProfile', 'No Copilot · No Mind Engine'].map((f, i) => (
+                <div key={f} style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px', fontSize: '13px', color: i === 4 ? 'var(--text-muted)' : 'var(--text-secondary)' }}>
+                  {i === 4 ? <X size={13} color="var(--text-muted)" /> : <Check size={13} color="var(--bull)" />} {f}
+                </div>
+              ))}
+              <Link href="/feed" style={{ textDecoration: 'none' }}>
+                <button style={{ width: '100%', marginTop: '12px', padding: '12px', borderRadius: '8px', border: '1px solid var(--border-default)', background: 'transparent', color: 'var(--text-secondary)', fontSize: '14px', fontWeight: '600', cursor: 'pointer' }}>
+                  Start Free
+                </button>
+              </Link>
+            </div>
+            {/* PRO */}
+            <div style={{ padding: '28px', borderRadius: '16px', border: '1px solid rgba(59,130,246,0.4)', background: 'rgba(59,130,246,0.05)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: '700', color: 'var(--accent-blue)', marginBottom: '8px' }}>
+                <Zap size={13} /> PRO
+              </div>
+              <div style={{ fontSize: '36px', fontWeight: '900', fontFamily: 'JetBrains Mono, monospace', marginBottom: '20px' }}>₹499<span style={{ fontSize: '14px', fontWeight: '400', color: 'var(--text-muted)', marginLeft: '6px' }}>/month</span></div>
+              {['Unlimited watchlist + research', 'Live Copilot — 6 agents + consensus', 'Mind Engine V7 — daily directive', 'Trader Model — personal statistics', 'Regime Detection (HMM-powered)'].map(f => (
+                <div key={f} style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px', fontSize: '13px', color: 'var(--text-secondary)' }}>
+                  <Check size={13} color="var(--bull)" /> {f}
+                </div>
+              ))}
+              <Link href="/settings" style={{ textDecoration: 'none' }}>
+                <button style={{ width: '100%', marginTop: '12px', padding: '12px', borderRadius: '8px', border: 'none', background: 'var(--accent-blue)', color: '#fff', fontSize: '14px', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+                  <Zap size={14} /> Upgrade — ₹499/month
+                </button>
+              </Link>
+            </div>
+          </div>
         </div>
       </section>
+
+      {/* ── FAQ ── */}
+      <section style={{ padding: '80px 48px' }}>
+        <div style={{ maxWidth: '700px', margin: '0 auto' }}>
+          <h2 style={{ fontSize: '28px', fontWeight: '800', marginBottom: '32px', textAlign: 'center' }}>Frequently Asked Questions</h2>
+          {FAQ_ITEMS.map((item, i) => (
+            <div
+              key={i}
+              style={{ borderBottom: '1px solid var(--border-muted)', marginBottom: '0' }}
+            >
+              <button
+                onClick={() => setOpenFAQ(openFAQ === i ? null : i)}
+                style={{ width: '100%', background: 'none', border: 'none', cursor: 'pointer', padding: '18px 0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', textAlign: 'left' }}
+              >
+                <span style={{ fontSize: '14px', fontWeight: '600', color: 'var(--text-primary)', lineHeight: 1.4 }}>{item.q}</span>
+                <span style={{ color: 'var(--text-muted)', flexShrink: 0, fontSize: '18px', lineHeight: 1 }}>{openFAQ === i ? '−' : '+'}</span>
+              </button>
+              {openFAQ === i && (
+                <div style={{ paddingBottom: '18px', fontSize: '13px', color: 'var(--text-muted)', lineHeight: 1.7 }}>{item.a}</div>
+              )}
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* ── Footer + Disclaimer ── */}
+      <footer style={{ padding: '40px 48px', borderTop: '1px solid var(--border-muted)', background: 'var(--bg-surface)' }}>
+        <div style={{ maxWidth: '900px', margin: '0 auto', textAlign: 'center' }}>
+          <div style={{ fontSize: '11px', color: 'var(--text-muted)', lineHeight: 1.8, marginBottom: '20px', padding: '16px', background: 'var(--bg-subtle)', borderRadius: '8px', border: '1px solid var(--border-muted)' }}>
+            <strong>Important Disclaimer:</strong> TradeGuard AI provides educational analysis only and does not constitute investment advice. The AI analysis is not a substitute for professional financial advice. Past behavioral patterns do not guarantee future results. TradeGuard AI does not execute trades or hold client funds. All users should consult a SEBI-registered investment advisor before making investment decisions. The 90% statistic references SEBI&apos;s FY2023-24 study on retail F&O trader profitability.
+          </div>
+          <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+            © 2025 TradeGuard AI · tradeguard.app · Not a SEBI-registered entity · Educational use only
+          </div>
+        </div>
+      </footer>
     </div>
   )
 }
