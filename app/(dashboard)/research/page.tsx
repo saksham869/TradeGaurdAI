@@ -134,7 +134,7 @@ function AnalysisPanel({ symbol, data }: { symbol: string; data: any }) {
       </div>
 
       {/* News + Technical */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
+      <div className="research-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
         <div className="glass-card" style={{ padding: '16px' }}>
           <div style={{ fontSize: '10px', fontWeight: '700', color: 'var(--text-muted)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '5px' }}>
             <BarChart2 size={11} /> News Impact

@@ -50,14 +50,14 @@ export default function TiltInterventionModal({ data, symbol, onDismiss, onStopT
   }, [])
 
   return (
-    <div style={{
+    <div className="tilt-modal-overlay" style={{
       position: 'fixed', inset: 0, zIndex: 9999,
       background: 'rgba(0,0,0,0.92)',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
       padding: '24px',
       backdropFilter: 'blur(8px)',
     }}>
-      <div style={{
+      <div className="tilt-modal" style={{
         width: '100%', maxWidth: '520px',
         background: '#0f0808',
         border: '1px solid rgba(239,68,68,0.35)',

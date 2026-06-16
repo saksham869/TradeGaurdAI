@@ -648,7 +648,7 @@ export default function CopilotPanel({ position, onPositionUpdate }: Props) {
 
       {/* ── 6 agent cards grid ── */}
       {perspectives.length > 0 && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px', marginBottom: '12px' }}>
+        <div className="copilot-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px', marginBottom: '12px' }}>
           {perspectives.map(p => <PerspectiveCard key={p.id} p={p} />)}
         </div>
       )}

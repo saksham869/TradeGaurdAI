@@ -305,3 +305,68 @@ body {
 @layer base {
   * { border-color: var(--border-default); }
 }
+
+/* ── Mobile pass (375px) ──────────────────────────────────────────────────── */
+@media (max-width: 767px) {
+  /* Hide sidebar on mobile */
+  .sidebar-desktop { display: none !important; }
+
+  /* Bottom tab bar */
+  .bottom-nav {
+    display: flex !important;
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    height: 60px;
+    background: var(--bg-surface);
+    border-top: 1px solid var(--border-muted);
+    z-index: 200;
+    justify-content: space-around;
+    align-items: center;
+    padding-bottom: env(safe-area-inset-bottom, 0);
+  }
+
+  /* Push main content above bottom nav */
+  .main-content-mobile { padding-bottom: 72px !important; }
+
+  /* Reduce main padding */
+  main { padding: 16px !important; }
+
+  /* Research: stacked layout */
+  .research-grid { grid-template-columns: 1fr !important; }
+
+  /* Copilot: stacked accordion grid */
+  .copilot-grid { grid-template-columns: 1fr !important; }
+
+  /* Journal forms: full width */
+  .journal-form { max-width: 100% !important; }
+
+  /* Filter rows: horizontal scroll */
+  .filter-row {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    flex-wrap: nowrap !important;
+    gap: 8px;
+  }
+  .filter-row::-webkit-scrollbar { display: none; }
+
+  /* Tilt modal: full screen */
+  .tilt-modal {
+    border-radius: 0 !important;
+    width: 100vw !important;
+    max-width: 100vw !important;
+    min-height: 100vh !important;
+    margin: 0 !important;
+    padding: 24px 16px !important;
+  }
+  .tilt-modal-overlay {
+    padding: 0 !important;
+    align-items: flex-start !important;
+  }
+
+  /* No horizontal scroll on body */
+  body { overflow-x: hidden; }
+}
+
+/* Bottom nav hidden on desktop */
+.bottom-nav { display: none; }
