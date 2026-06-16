@@ -44,7 +44,7 @@ async function main() {
   console.log(`  watchlist: ${watchlist.length} symbols`)
 
   // Open positions
-  const pos1 = await prisma.position.upsert({
+  await prisma.trade.upsert({
     where: { id: 'seed_pos_reliance' } as never,
     update: {},
     create: {
@@ -52,17 +52,20 @@ async function main() {
       userId: user.id,
       symbol: 'RELIANCE.NS',
       assetClass: 'STOCK',
-      side: 'LONG',
+      direction: 'LONG',
       entryPrice: 2950.00,
       quantity: 20,
       stopLoss: 2850.00,
-      targetPrice: 3200.00,
+      takeProfit: 3200.00,
       status: 'OPEN',
+      setupTag: 'range-reversal',
+      statedConviction: 4,
+      regimeAtEntry: 'CHOP',
       notes: 'Breakout above 200-DMA on strong volume. Q4 refinery margins expanding.',
     },
   })
 
-  await prisma.position.upsert({
+  await prisma.trade.upsert({
     where: { id: 'seed_pos_infy' } as never,
     update: {},
     create: {
@@ -70,12 +73,15 @@ async function main() {
       userId: user.id,
       symbol: 'INFY.NS',
       assetClass: 'STOCK',
-      side: 'LONG',
+      direction: 'LONG',
       entryPrice: 1580.00,
       quantity: 50,
       stopLoss: 1490.00,
-      targetPrice: 1750.00,
+      takeProfit: 1750.00,
       status: 'OPEN',
+      setupTag: 'breakout-chase',
+      statedConviction: 3,
+      regimeAtEntry: 'CHOP',
       notes: 'Large deal win cycle post-Q4 guidance. RSI reversal from oversold.',
     },
   })

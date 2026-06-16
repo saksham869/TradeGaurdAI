@@ -11,16 +11,16 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
   if (!userId) return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 })
 
   try {
-    const position = await db.position.findFirst({
+    const trade = await db.trade.findFirst({
       where: { id: params.id, userId },
     })
 
-    if (!position) {
+    if (!trade) {
       return NextResponse.json({ success: false, error: 'Position not found' }, { status: 404 })
     }
 
     const session = await db.copilotSession.findUnique({
-      where: { positionId: params.id },
+      where: { tradeId: params.id },
     })
 
     if (!session) {
@@ -44,7 +44,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     })
 
     // Re-run all 6 agents at the new refreshCount
-    const result = await runCopilotAnalysis(updatedSession.id, position)
+    const result = await runCopilotAnalysis(updatedSession.id, trade)
 
     return NextResponse.json({ success: true, data: result })
   } catch (error) {

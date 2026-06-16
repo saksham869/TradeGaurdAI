@@ -6,7 +6,7 @@ export async function GET() {
     const [journals, positions, feedEvents, sessions, trapWarnings, riskEntries] =
       await Promise.all([
         db.journalEntry.count(),
-        db.position.count(),
+        db.trade.count(),
         db.feedEvent.count(),
         db.copilotSession.count(),
         db.feedEvent.count({ where: { retailTrap: true } }),

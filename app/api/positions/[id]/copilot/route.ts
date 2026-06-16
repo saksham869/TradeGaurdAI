@@ -10,17 +10,17 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
 
   try {
     // Ownership check
-    const position = await db.position.findFirst({
+    const trade = await db.trade.findFirst({
       where: { id: params.id, userId },
-      select: { id: true, symbol: true, side: true, entryPrice: true, status: true },
+      select: { id: true, symbol: true, direction: true, entryPrice: true, status: true },
     })
 
-    if (!position) {
+    if (!trade) {
       return NextResponse.json({ success: false, error: 'Position not found' }, { status: 404 })
     }
 
     const session = await db.copilotSession.findUnique({
-      where: { positionId: params.id },
+      where: { tradeId: params.id },
     })
 
     if (!session) {
@@ -38,7 +38,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
 
     return NextResponse.json({
       success: true,
-      data: { position, session: { ...session, perspectives } },
+      data: { position: trade, session: { ...session, perspectives } },
     })
   } catch (error) {
     return NextResponse.json(

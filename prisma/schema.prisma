@@ -13,19 +13,15 @@ enum Plan {
   PRO
 }
 
-enum PositionSide {
+enum TradeDirection {
   LONG
   SHORT
 }
 
-enum PositionStatus {
+enum TradeStatus {
   OPEN
   CLOSED
-}
-
-enum PositionSource {
-  MANUAL
-  BROKER_WEBHOOK
+  CANCELLED
 }
 
 enum SessionStatus {
@@ -95,7 +91,7 @@ model User {
   watchlist    WatchlistItem[]
   journals     JournalEntry[]
   psychProfile PsychProfile?
-  positions    Position[]
+  trades       Trade[]
   @@index([clerkId])
 }
 
@@ -237,36 +233,39 @@ model MarketBrief {
 // V5 — Live Trading Copilot
 // =============================================================================
 
-model Position {
-  id            String         @id @default(cuid())
-  userId        String
-  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
-  symbol        String
-  assetClass    AssetClass     @default(STOCK)
-  side          PositionSide
-  entryPrice    Float
-  quantity      Float
-  stopLoss      Float?
-  targetPrice   Float?
-  status        PositionStatus @default(OPEN)
-  source        PositionSource @default(MANUAL)
-  openedAt      DateTime       @default(now())
-  closedAt      DateTime?
-  exitPrice     Float?
-  pnlDollar     Float?
-  pnlPct        Float?
-  notes         String?        @db.Text
-  session       CopilotSession?
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
+model Trade {
+  id                String         @id @default(cuid())
+  userId            String
+  user              User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  symbol            String
+  assetClass        AssetClass     @default(STOCK)
+  direction         TradeDirection
+  entryPrice        Float
+  entryTime         DateTime       @default(now())
+  exitPrice         Float?
+  exitTime          DateTime?
+  quantity          Float
+  stopLoss          Float?
+  takeProfit        Float?
+  status            TradeStatus    @default(OPEN)
+  pnl               Float?
+  pnlPct            Float?
+  rMultiple         Float?
+  setupTag          String?
+  regimeAtEntry     String?
+  statedConviction  Int?
+  notes             String?        @db.Text
+  session           CopilotSession?
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
   @@index([userId, status])
-  @@index([userId, openedAt])
+  @@index([userId, createdAt])
 }
 
 model CopilotSession {
   id                String              @id @default(cuid())
-  positionId        String              @unique
-  position          Position            @relation(fields: [positionId], references: [id], onDelete: Cascade)
+  tradeId           String              @unique
+  trade             Trade               @relation(fields: [tradeId], references: [id], onDelete: Cascade)
   status            SessionStatus       @default(ACTIVE)
   refreshCount      Int                 @default(0)
   lastRefreshedAt   DateTime?
@@ -296,4 +295,52 @@ model CopilotPerspective {
   generatedAt  DateTime        @default(now())
   @@index([sessionId, refreshIndex])
   @@index([sessionId, type, refreshIndex])
+}
+
+// =============================================================================
+// V7 — Mind Engine
+// =============================================================================
+
+model RegimeSnapshot {
+  id          String   @id @default(cuid())
+  symbol      String
+  regime      String   // BULL_TREND | BEAR_TREND | CHOP | CRISIS
+  confidence  Float
+  posterior   Json     // { BULL_TREND, BEAR_TREND, CHOP, CRISIS }
+  transition  Json     // transition probabilities from current regime
+  source      String   @default("hmm")  // "hmm" | "heuristic"
+  capturedAt  DateTime @default(now())
+  @@index([symbol, capturedAt])
+}
+
+model TraderModel {
+  id                String   @id @default(cuid())
+  userId            String   @unique
+  totalClosedTrades Int      @default(0)
+  totalJournals     Int      @default(0)
+  calibrated        Boolean  @default(false)
+  winRate           Float?
+  avgWinR           Float?
+  avgLossR          Float?
+  expectancyR       Float?
+  profitFactor      Float?
+  statsBySetup      Json     @default("{}")
+  statsByRegime     Json     @default("{}")
+  statsByHour       Json     @default("{}")
+  statsAfterLoss    Json     @default("{}")
+  statsAfterWin     Json     @default("{}")
+  behavioralFlags   Json     @default("[]")
+  convictionCalib   Json     @default("{}")
+  computedAt        DateTime @updatedAt
+}
+
+model MindDirective {
+  id              String   @id @default(cuid())
+  userId          String
+  directiveDate   String   // "YYYY-MM-DD" in user's local timezone
+  marketState     Json
+  traderState     Json
+  directive       Json
+  acknowledged    Boolean  @default(false)
+  @@unique([userId, directiveDate])
 }

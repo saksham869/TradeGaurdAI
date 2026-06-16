@@ -7,9 +7,9 @@ export async function GET() {
   if (!userId) return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 })
 
   try {
-    const positions = await db.position.findMany({
+    const trades = await db.trade.findMany({
       where: { userId },
-      orderBy: { openedAt: 'desc' },
+      orderBy: { entryTime: 'desc' },
       include: {
         session: {
           select: {
@@ -22,7 +22,7 @@ export async function GET() {
         },
       },
     })
-    return NextResponse.json({ success: true, data: positions })
+    return NextResponse.json({ success: true, data: trades })
   } catch (error) {
     return NextResponse.json({ success: false, error: 'Failed to fetch positions' }, { status: 500 })
   }
@@ -33,19 +33,22 @@ export async function POST(request: NextRequest) {
   if (!userId) return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 })
 
   try {
-    const { symbol, side, entryPrice, quantity, stopLoss, targetPrice, assetClass, notes } =
+    const { symbol, direction, side, entryPrice, quantity, stopLoss, takeProfit, targetPrice, assetClass, notes, setupTag, statedConviction } =
       await request.json()
 
-    if (!symbol || !side || entryPrice == null || quantity == null) {
+    // Accept both direction (new) and side (legacy) field names
+    const tradeDirection = direction ?? side
+
+    if (!symbol || !tradeDirection || entryPrice == null || quantity == null) {
       return NextResponse.json(
-        { success: false, error: 'symbol, side, entryPrice, quantity are required' },
+        { success: false, error: 'symbol, direction, entryPrice, quantity are required' },
         { status: 400 }
       )
     }
 
-    if (!['LONG', 'SHORT'].includes(side)) {
+    if (!['LONG', 'SHORT'].includes(tradeDirection)) {
       return NextResponse.json(
-        { success: false, error: 'side must be LONG or SHORT' },
+        { success: false, error: 'direction must be LONG or SHORT' },
         { status: 400 }
       )
     }
@@ -57,24 +60,25 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const position = await db.position.create({
+    const trade = await db.trade.create({
       data: {
         userId,
         symbol: symbol.toUpperCase().trim(),
-        side,
+        direction: tradeDirection,
         entryPrice,
         quantity,
-        stopLoss:    stopLoss    ?? null,
-        targetPrice: targetPrice ?? null,
-        assetClass:  assetClass  ?? 'STOCK',
-        notes:       notes       ?? null,
-        source: 'MANUAL',
+        stopLoss:         stopLoss         ?? null,
+        takeProfit:       takeProfit ?? targetPrice ?? null,
+        assetClass:       assetClass       ?? 'STOCK',
+        notes:            notes            ?? null,
+        setupTag:         setupTag         ?? null,
+        statedConviction: statedConviction ?? null,
       },
     })
 
-    return NextResponse.json({ success: true, data: position }, { status: 201 })
+    return NextResponse.json({ success: true, data: trade }, { status: 201 })
   } catch (error) {
-    console.error('Position Create Error:', error)
-    return NextResponse.json({ success: false, error: 'Failed to create position' }, { status: 500 })
+    console.error('Trade Create Error:', error)
+    return NextResponse.json({ success: false, error: 'Failed to create trade' }, { status: 500 })
   }
 }

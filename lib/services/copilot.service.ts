@@ -1,4 +1,4 @@
-import { Position } from '@prisma/client'
+import { Trade } from '@prisma/client'
 import db from '../db'
 import { callGrok } from '../ai/grok'
 import { callPerplexity } from '../ai/perplexity'
@@ -17,42 +17,42 @@ type AgentOutput = { text: string; model: string }
 // Public entry point — called by start and refresh routes
 // =============================================================================
 
-export async function runCopilotAnalysis(sessionId: string, position: Position) {
+export async function runCopilotAnalysis(sessionId: string, trade: Trade) {
   const session = await db.copilotSession.findUnique({ where: { id: sessionId } })
   if (!session) throw new Error(`CopilotSession ${sessionId} not found`)
 
   // 1. Live price — fallback to entry price if Yahoo is unavailable
   let priceData: Awaited<ReturnType<typeof getYahooQuote>> | null = null
   try {
-    priceData = await getYahooQuote(position.symbol)
+    priceData = await getYahooQuote(trade.symbol)
   } catch {
-    console.warn(`Yahoo Finance unavailable for ${position.symbol} — using entry price`)
+    console.warn(`Yahoo Finance unavailable for ${trade.symbol} — using entry price`)
   }
 
   // livePrice is the real market price (null if Yahoo was unavailable) — used for
   // P&L display so a fallback never produces a misleading number.
   const livePrice = priceData?.price ?? null
-  const currentPrice = livePrice ?? position.entryPrice
+  const currentPrice = livePrice ?? trade.entryPrice
   const pnlPct =
-    position.side === 'LONG'
-      ? ((currentPrice - position.entryPrice) / position.entryPrice) * 100
-      : ((position.entryPrice - currentPrice) / position.entryPrice) * 100
+    trade.direction === 'LONG'
+      ? ((currentPrice - trade.entryPrice) / trade.entryPrice) * 100
+      : ((trade.entryPrice - currentPrice) / trade.entryPrice) * 100
   const pnlDollar =
-    position.side === 'LONG'
-      ? (currentPrice - position.entryPrice) * position.quantity
-      : (position.entryPrice - currentPrice) * position.quantity
+    trade.direction === 'LONG'
+      ? (currentPrice - trade.entryPrice) * trade.quantity
+      : (trade.entryPrice - currentPrice) * trade.quantity
   const durationMinutes = Math.floor(
-    (Date.now() - new Date(position.openedAt).getTime()) / 60_000
+    (Date.now() - new Date(trade.entryTime).getTime()) / 60_000
   )
 
   // 2. Shared context for all agents
   const ctx: CopilotContext = {
-    symbol:          position.symbol,
-    side:            position.side,
-    entryPrice:      position.entryPrice,
-    quantity:        position.quantity,
-    stopLoss:        position.stopLoss,
-    targetPrice:     position.targetPrice,
+    symbol:          trade.symbol,
+    side:            trade.direction,
+    entryPrice:      trade.entryPrice,
+    quantity:        trade.quantity,
+    stopLoss:        trade.stopLoss,
+    targetPrice:     trade.takeProfit,
     currentPrice,
     pnlPct,
     pnlDollar,
@@ -70,7 +70,7 @@ export async function runCopilotAnalysis(sessionId: string, position: Position) 
 
   // 3. Behavioral agent also needs PsychProfile
   const psychProfile = await db.psychProfile.findUnique({
-    where: { userId: position.userId },
+    where: { userId: trade.userId },
   })
   const behavCtx: BehavioralContext = {
     ...ctx,
@@ -157,9 +157,9 @@ export async function runCopilotAnalysis(sessionId: string, position: Position) 
 
   try {
     await pusherServer.trigger(
-      `copilot-${position.id}`,
+      `copilot-${trade.id}`,
       'copilot-update',
-      { positionId: position.id, session: sessionWithPerspectives }
+      { tradeId: trade.id, session: sessionWithPerspectives }
     )
   } catch {
     // Non-blocking — UI will still get data on next poll
