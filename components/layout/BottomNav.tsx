@@ -2,14 +2,14 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { LayoutDashboard, Search, BookOpen, Radio, MoreHorizontal } from 'lucide-react'
+import { LayoutDashboard, Search, BookOpen, Radio, Brain, ClipboardList, MoreHorizontal } from 'lucide-react'
 
 const TABS = [
   { href: '/feed',     label: 'Feed',     icon: LayoutDashboard },
-  { href: '/research', label: 'Research', icon: Search },
-  { href: '/journal',  label: 'Journal',  icon: BookOpen },
-  { href: '/copilot',  label: 'Copilot',  icon: Radio },
-  { href: '/settings', label: 'More',     icon: MoreHorizontal },
+  { href: '/mind',     label: 'Mind',     icon: Brain           },
+  { href: '/trades',   label: 'Trades',   icon: ClipboardList   },
+  { href: '/journal',  label: 'Journal',  icon: BookOpen        },
+  { href: '/settings', label: 'More',     icon: MoreHorizontal  },
 ]
 
 export default function BottomNav() {

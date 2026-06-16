@@ -4,16 +4,18 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard, Search, BookOpen, Star, Settings,
-  TrendingUp, Zap, Radio
+  TrendingUp, Zap, Radio, Brain, ClipboardList
 } from 'lucide-react'
 
 const links = [
-  { href: '/feed', label: 'Intelligence Feed', icon: LayoutDashboard },
-  { href: '/research', label: 'Research', icon: Search },
-  { href: '/copilot', label: 'Live Copilot', icon: Radio },
-  { href: '/journal', label: 'Journal', icon: BookOpen },
-  { href: '/watchlist', label: 'Watchlist', icon: Star },
-  { href: '/settings', label: 'Settings', icon: Settings },
+  { href: '/feed',     label: 'Intelligence Feed', icon: LayoutDashboard },
+  { href: '/research', label: 'Research',           icon: Search          },
+  { href: '/mind',     label: 'Mind Engine',        icon: Brain           },
+  { href: '/copilot',  label: 'Live Copilot',       icon: Radio           },
+  { href: '/trades',   label: 'Trade Log',          icon: ClipboardList   },
+  { href: '/journal',  label: 'Journal',            icon: BookOpen        },
+  { href: '/watchlist',label: 'Watchlist',           icon: Star            },
+  { href: '/settings', label: 'Settings',           icon: Settings        },
 ]
 
 export default function Sidebar() {
@@ -48,7 +50,7 @@ export default function Sidebar() {
               TradeGuard
             </div>
             <div style={{ fontSize: '10px', color: 'var(--text-muted)', fontFamily: 'JetBrains Mono, monospace', fontWeight: '600', letterSpacing: '0.1em' }}>
-              AI · V5
+              AI · V7
             </div>
           </div>
         </div>
