@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { Activity, TrendingUp, AlertTriangle, BarChart2, Flame, Brain, RefreshCw } from 'lucide-react'
 import IntelligenceFeed from '@/components/feed/IntelligenceFeed'
+import RegimeBadge from '@/components/shared/RegimeBadge'
 
 interface FeedStats {
   total:        number
@@ -101,9 +102,15 @@ export default function FeedPage() {
   return (
     <div>
       <div style={{ marginBottom: '24px' }}>
-        <h1 style={{ fontSize: '20px', fontWeight: '700', color: 'var(--text-primary)', marginBottom: '4px' }}>
-          Intelligence Feed
-        </h1>
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', flexWrap:'wrap', gap:'8px', marginBottom:'4px' }}>
+          <h1 style={{ fontSize: '20px', fontWeight: '700', color: 'var(--text-primary)' }}>
+            Intelligence Feed
+          </h1>
+          <div style={{ display:'flex', gap:'8px', alignItems:'center' }}>
+            <RegimeBadge symbol="^NSEI" />
+            <RegimeBadge symbol="^GSPC" />
+          </div>
+        </div>
         <p style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
           AI-analyzed market events · Real-time signals · Retail trap detection
         </p>

@@ -3,6 +3,7 @@ import { callPerplexity } from '../ai/perplexity'
 import { routeAITask } from '../ai/router'
 import { PROMPTS } from '../ai/prompts'
 import { retrieveFinancialKnowledge } from '../ai/foundry-search'
+import { getRegime, homeIndex } from './regime.service'
 
 export async function analyzeTickerParallel(symbol: string) {
   try {
@@ -115,15 +116,26 @@ export async function analyzeTickerParallel(symbol: string) {
       foundryTimeout,
     ])
 
-    // Step 4: Synthesis — routes to Claude when ANTHROPIC_API_KEY set, else Azure
+    // Step 4: Regime context for synthesis — non-blocking, best-effort
+    let regimeLine = ''
+    try {
+      const idx    = homeIndex(symbol)
+      const regime = await getRegime(idx)
+      regimeLine   = `Current market regime (${idx}): ${regime.current_regime} — confidence ${(regime.confidence * 100).toFixed(0)}%. `
+        + `Posterior: BULL ${((regime.posterior['BULL_TREND'] ?? 0) * 100).toFixed(0)}% / BEAR ${((regime.posterior['BEAR_TREND'] ?? 0) * 100).toFixed(0)}% / CHOP ${((regime.posterior['CHOP'] ?? 0) * 100).toFixed(0)}% / CRISIS ${((regime.posterior['CRISIS'] ?? 0) * 100).toFixed(0)}%. `
+        + `Frame your recommendation accordingly.`
+    } catch { /* regime unavailable — proceed without it */ }
+
+    // Step 5: Synthesis — routes to Claude when ANTHROPIC_API_KEY set, else Azure
     const synthesisRes = await routeAITask('synthesis', PROMPTS.TICKER_SYNTHESIS({
       symbol,
-      currentPrice:  priceData.price,
-      newsScore:     newsObj.sentimentScore ?? 50,
-      technicalBias: techObj.technicalBias  ?? 'NEUTRAL',
-      trapWarning:   trapObj.retailMistake  || 'None identified',
-      trapActive:    trapObj.trapActive     || false,
+      currentPrice:   priceData.price,
+      newsScore:      newsObj.sentimentScore ?? 50,
+      technicalBias:  techObj.technicalBias  ?? 'NEUTRAL',
+      trapWarning:    trapObj.retailMistake  || 'None identified',
+      trapActive:     trapObj.trapActive     || false,
       foundryContext: foundry.available ? foundry.contextBlock : undefined,
+      regimeContext:  regimeLine || undefined,
     })).catch(() => '{}')
 
     const synthesisObj = parseSafe(synthesisRes)

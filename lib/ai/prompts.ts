@@ -130,6 +130,7 @@ warningLevel: NONE|CAUTION|HIGH|CRITICAL`,
     trapWarning:   string
     trapActive:    boolean
     foundryContext?: string   // grounded knowledge from Azure AI Foundry IQ
+    regimeContext?: string    // current market regime from HMM service
   }) => `You are the TradeGuard AI synthesis engine. Produce the final recommendation for ${p.symbol}.
 
 ${p.foundryContext ? `VERIFIED KNOWLEDGE BASE (Azure AI Foundry IQ — financial-knowledge index):
@@ -140,6 +141,7 @@ Based on the above verified sources and the following live agent analysis:` : 'B
 Price:$${p.currentPrice} | News Sentiment:${p.newsScore}/100
 Technical Bias:${p.technicalBias} | Retail Trap Active:${p.trapActive}
 Trap Warning: ${p.trapWarning}
+${p.regimeContext ? `Market Regime: ${p.regimeContext}` : ''}
 
 Return ONLY valid JSON. No markdown. No code fences.
 {
