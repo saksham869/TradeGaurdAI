@@ -150,6 +150,9 @@ function AnalysisPanel({ symbol, data }: { symbol: string; data: any }) {
         <div className="glass-card" style={{ padding: '16px' }}>
           <div style={{ fontSize: '10px', fontWeight: '700', color: 'var(--text-muted)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '5px' }}>
             <Activity size={11} /> Technical Read
+            {!data.indicatorsReal && (
+              <span style={{ fontSize: '9px', fontWeight: '500', color: 'var(--text-muted)', textTransform: 'none', letterSpacing: 0, marginLeft: '4px' }}>(approx)</span>
+            )}
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '10px' }}>
             {[

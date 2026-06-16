@@ -3,6 +3,9 @@
  * Supports US stocks, Indian NSE (.NS) and BSE (.BO), crypto, ETFs globally.
  */
 
+import { redis } from '../redis'
+import { OHLCVBar, calculateEMA, calculateRSI, calculateVWAP } from './indicators'
+
 export type MarketType = 'US' | 'NSE' | 'BSE' | 'CRYPTO' | 'FOREX' | 'COMMODITY' | 'GLOBAL' | 'UNKNOWN'
 
 // Well-known Indian tickers that are already suffixed or clearly Indian
@@ -93,10 +96,114 @@ export interface TickerQuote {
   fiftyTwoWeekHigh: number
   fiftyTwoWeekLow: number
   name: string
-  // Derived technicals (calculated from available data)
-  ema20Approx: number
-  vwapApprox: number
-  rsiApprox: number
+  // Technical indicators — real values when bars available, approx fallback labeled below
+  ema20Approx: number   // kept for backwards compat — equals ema20
+  vwapApprox: number    // kept for backwards compat — equals vwap
+  rsiApprox: number     // kept for backwards compat — equals rsi
+  ema20: number         // real EMA(20) from daily series, or approx
+  vwap: number          // real VWAP from intraday bars, or approx
+  rsi: number           // real RSI(14) from daily series, or approx
+  indicatorsReal: boolean // true = computed from bar series; false = approximation
+}
+
+function isMarketHours(): boolean {
+  const now = new Date()
+  const h = now.getUTCHours()
+  // Rough check: NYSE 14:30–21:00 UTC or NSE 3:45–10:00 UTC
+  return (h >= 14 && h < 21) || (h >= 3 && h < 10)
+}
+
+function barCacheTTL(): number {
+  return isMarketHours() ? 60 * 15 : 60 * 60
+}
+
+/**
+ * Fetch daily OHLCV bars from Yahoo Finance (up to 120 trading days ≈ 6 months).
+ * Cached in Redis with 15m TTL during market hours, 1h otherwise.
+ */
+export async function getDailyBars(symbol: string, days = 120): Promise<OHLCVBar[]> {
+  const { yahooSymbol } = detectMarket(symbol)
+  const cacheKey = `bars:daily:${yahooSymbol}:${days}`
+
+  try {
+    const cached = await redis?.get(cacheKey)
+    if (cached) return cached as OHLCVBar[]
+  } catch { /* Redis unavailable */ }
+
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooSymbol)}?interval=1d&range=6mo`
+  const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' } })
+  if (!res.ok) throw new Error(`Yahoo chart ${yahooSymbol} returned ${res.status}`)
+
+  const json = await res.json()
+  const result = json?.chart?.result?.[0]
+  if (!result) throw new Error(`No bar data for ${yahooSymbol}`)
+
+  const timestamps: number[] = result.timestamp ?? []
+  const q = result.indicators?.quote?.[0] ?? {}
+  const bars: OHLCVBar[] = []
+  for (let i = 0; i < timestamps.length; i++) {
+    const c = q.close?.[i]
+    if (c == null) continue
+    bars.push({
+      timestamp: timestamps[i],
+      open:   q.open?.[i]   ?? c,
+      high:   q.high?.[i]   ?? c,
+      low:    q.low?.[i]    ?? c,
+      close:  c,
+      volume: q.volume?.[i] ?? 0,
+    })
+  }
+
+  const trimmed = bars.slice(-days)
+  try {
+    await redis?.set(cacheKey, trimmed, { ex: barCacheTTL() })
+  } catch { /* Redis unavailable */ }
+
+  return trimmed
+}
+
+/**
+ * Fetch 15-minute intraday bars for VWAP calculation (last 5 days).
+ * Cached in Redis with 15m TTL during market hours, 1h otherwise.
+ */
+export async function getIntradayBars(symbol: string): Promise<OHLCVBar[]> {
+  const { yahooSymbol } = detectMarket(symbol)
+  const cacheKey = `bars:intraday:${yahooSymbol}`
+
+  try {
+    const cached = await redis?.get(cacheKey)
+    if (cached) return cached as OHLCVBar[]
+  } catch { /* Redis unavailable */ }
+
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooSymbol)}?interval=15m&range=5d`
+  const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' } })
+  if (!res.ok) return []
+
+  const json = await res.json()
+  const result = json?.chart?.result?.[0]
+  if (!result) return []
+
+  const timestamps: number[] = result.timestamp ?? []
+  const q = result.indicators?.quote?.[0] ?? {}
+  const bars: OHLCVBar[] = []
+  for (let i = 0; i < timestamps.length; i++) {
+    const c = q.close?.[i]
+    if (c == null) continue
+    bars.push({
+      timestamp: timestamps[i],
+      open:   q.open?.[i]   ?? c,
+      high:   q.high?.[i]   ?? c,
+      low:    q.low?.[i]    ?? c,
+      close:  c,
+      volume: q.volume?.[i] ?? 0,
+    })
+  }
+
+  try {
+    await redis?.set(cacheKey, bars, { ex: barCacheTTL() })
+  } catch { /* Redis unavailable */ }
+
+  return bars
 }
 
 /**
@@ -138,16 +245,38 @@ export async function getYahooQuote(symbol: string): Promise<TickerQuote> {
     const volume = meta.regularMarketVolume || 0
     const avgVolume = meta.averageDailyVolume3Month || meta.averageDailyVolume10Day || volume
 
-    // Approximate EMA20 from last 5 days of closes (rough but directionally correct)
-    const ema20Approx = closes.length > 0
+    // Fetch daily bars and intraday bars in parallel for real indicators
+    const [dailyBars, intradayBars] = await Promise.all([
+      getDailyBars(yahooSymbol, 120).catch(() => [] as OHLCVBar[]),
+      getIntradayBars(yahooSymbol).catch(() => [] as OHLCVBar[]),
+    ])
+
+    let ema20Real: number | null = null
+    let rsiReal: number | null = null
+    let vwapReal: number | null = null
+
+    if (dailyBars.length >= 21) {
+      const dailyCloses = dailyBars.map(b => b.close)
+      ema20Real = calculateEMA(dailyCloses, 20)
+      rsiReal   = calculateRSI(dailyCloses, 14)
+    }
+
+    if (intradayBars.length > 0) {
+      vwapReal = calculateVWAP(intradayBars)
+    }
+
+    const indicatorsReal = ema20Real !== null && rsiReal !== null && vwapReal !== null
+
+    // Approx fallbacks (used when bars are unavailable)
+    const ema20Fallback = closes.length > 0
       ? closes.slice(-5).reduce((a: number, b: number) => a + b, 0) / closes.slice(-5).length
       : price * 0.98
+    const vwapFallback  = (high + low + price) / 3
+    const rsiFallback   = changePct > 3 ? 72 : changePct > 1 ? 62 : changePct < -3 ? 28 : changePct < -1 ? 38 : 52
 
-    // VWAP approximation: midpoint of day
-    const vwapApprox = (high + low + price) / 3
-
-    // RSI approximation from price change (rough)
-    const rsiApprox = changePct > 3 ? 72 : changePct > 1 ? 62 : changePct < -3 ? 28 : changePct < -1 ? 38 : 52
+    const ema20 = ema20Real ?? ema20Fallback
+    const vwap  = vwapReal  ?? vwapFallback
+    const rsi   = rsiReal   ?? rsiFallback
 
     return {
       symbol: symbol.toUpperCase(),
@@ -168,9 +297,13 @@ export async function getYahooQuote(symbol: string): Promise<TickerQuote> {
       fiftyTwoWeekHigh: meta.fiftyTwoWeekHigh || price * 1.3,
       fiftyTwoWeekLow: meta.fiftyTwoWeekLow || price * 0.7,
       name: meta.longName || meta.shortName || symbol,
-      ema20Approx,
-      vwapApprox,
-      rsiApprox,
+      ema20,
+      vwap,
+      rsi,
+      ema20Approx: ema20,
+      vwapApprox:  vwap,
+      rsiApprox:   rsi,
+      indicatorsReal,
     }
   } catch (error) {
     console.error(`Yahoo Finance error for ${yahooSymbol}:`, error)

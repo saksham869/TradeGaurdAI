@@ -62,9 +62,9 @@ export async function runCopilotAnalysis(sessionId: string, position: Position) 
     open:      priceData?.open     ?? currentPrice,
     volume:    priceData?.volume   ?? 0,
     avgVolume: priceData?.avgVolume ?? 0,
-    ema20:     priceData?.ema20Approx ?? currentPrice * 0.98,
-    vwap:      priceData?.vwapApprox  ?? currentPrice,
-    rsi:       priceData?.rsiApprox   ?? 50,
+    ema20:     priceData?.ema20 ?? currentPrice * 0.98,
+    vwap:      priceData?.vwap  ?? currentPrice,
+    rsi:       priceData?.rsi   ?? 50,
     changePct: priceData?.changePct   ?? 0,
   }
 

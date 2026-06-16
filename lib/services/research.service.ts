@@ -1,4 +1,4 @@
-import { getYahooQuote, formatVolume, formatMarketCap } from '../data/yahoo'
+import { getYahooQuote, formatVolume, formatMarketCap, type MarketType } from '../data/yahoo'
 import { callPerplexity } from '../ai/perplexity'
 import { routeAITask } from '../ai/router'
 import { PROMPTS } from '../ai/prompts'
@@ -7,7 +7,7 @@ import { retrieveFinancialKnowledge } from '../ai/foundry-search'
 export async function analyzeTickerParallel(symbol: string) {
   try {
     // Step 1: Fetch live price from Yahoo Finance (works for US, NSE, BSE, Crypto)
-    let quote
+    let quote: Awaited<ReturnType<typeof getYahooQuote>> | undefined
     let priceData = {
       price: 150,
       changePct: 1.2,
@@ -20,11 +20,12 @@ export async function analyzeTickerParallel(symbol: string) {
       vwap: 150.5,
       rsi: 55,
       currency: 'USD',
-      market: 'US',
+      market: 'US' as MarketType,
       name: symbol,
       exchange: 'NASDAQ',
       marketCapStr: 'N/A',
       volumeStr: '1.0M',
+      indicatorsReal: false,
     }
 
     try {
@@ -37,15 +38,16 @@ export async function analyzeTickerParallel(symbol: string) {
         low: quote.low,
         volume: quote.volume,
         avgVolume: quote.avgVolume,
-        ema20: quote.ema20Approx,
-        vwap: quote.vwapApprox,
-        rsi: quote.rsiApprox,
+        ema20: quote.ema20,
+        vwap: quote.vwap,
+        rsi: quote.rsi,
         currency: quote.currency,
         market: quote.market,
         name: quote.name,
         exchange: quote.exchange,
         marketCapStr: formatMarketCap(quote.marketCap, quote.currency),
         volumeStr: formatVolume(quote.volume),
+        indicatorsReal: quote.indicatorsReal,
       }
     } catch (priceErr) {
       console.warn(`Yahoo Finance price fetch failed for ${symbol}, using fallback:`, priceErr)
@@ -132,6 +134,7 @@ export async function analyzeTickerParallel(symbol: string) {
       retailTrapAnalysis:  trapObj,
       synthesis:           synthesisObj,
       priceAtAnalysis:     priceData.price,
+      indicatorsReal:      priceData.indicatorsReal,
       // Foundry IQ grounding data — passed through to UI
       foundryIQ: {
         available:  foundry.available,
