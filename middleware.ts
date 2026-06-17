@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextFetchEvent, NextRequest, NextResponse } from 'next/server'
 import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
 
 // ── Rate limiter (in-memory; resets per cold start) ─────────────────────────
@@ -96,8 +96,8 @@ const clerkHandler = process.env.CLERK_SECRET_KEY
   ? clerkMiddleware((auth, request) => handleRequest(request, () => auth().protect()))
   : null
 
-export default function middleware(request: NextRequest) {
-  if (clerkHandler) return clerkHandler(request)
+export default function middleware(request: NextRequest, event: NextFetchEvent) {
+  if (clerkHandler) return clerkHandler(request, event)
   return handleRequest(request)
 }
 
