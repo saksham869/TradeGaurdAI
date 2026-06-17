@@ -4,6 +4,13 @@ import { createSubscription } from '@/lib/payments/razorpay'
 import db from '@/lib/db'
 
 export async function POST() {
+  if (!process.env.RAZORPAY_KEY_ID || !process.env.RAZORPAY_KEY_SECRET) {
+    return NextResponse.json(
+      { success: false, error: 'Payment provider not configured' },
+      { status: 503 }
+    )
+  }
+
   const userId = await requireAuth()
 
   try {

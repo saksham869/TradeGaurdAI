@@ -26,6 +26,10 @@ async function check(
       if (res.status === 401 || res.status === 402) {
         return { name, ok: true, status: res.status, note: 'auth-gated (expected)' }
       }
+      // 503 is expected when external providers (Razorpay, etc.) aren't configured locally
+      if (res.status === 503) {
+        return { name, ok: true, status: res.status, note: 'provider not configured (expected in dev)' }
+      }
       return { name, ok: false, status: res.status, note: String(body).slice(0, 120) }
     }
 

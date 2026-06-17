@@ -45,36 +45,28 @@ function applySecurityHeaders(response: NextResponse): NextResponse {
 
 // ── Public routes (never need Clerk auth) ────────────────────────────────────
 const isPublicRoute = createRouteMatcher([
-  '/',                          // Landing page
+  '/',
   '/sign-in(.*)',
   '/sign-up(.*)',
-  '/api/webhooks/(.*)',         // Clerk + Razorpay webhooks
-  '/api/cron(.*)',              // Cron endpoints self-protect via Bearer token
+  '/api/webhooks/(.*)',
+  '/api/cron(.*)',
 ])
 
-// ── Combined middleware ───────────────────────────────────────────────────────
-// When CLERK_SECRET_KEY is present: Clerk handles auth for dashboard/API routes.
-// Without the key (dev/preview): only rate limiting + security headers run.
-
-export default clerkMiddleware((auth, request) => {
+// ── Shared handler logic (runs inside or outside clerkMiddleware) ─────────────
+function handleRequest(request: NextRequest, protectFn?: () => void): NextResponse {
   const { pathname } = request.nextUrl
   const clientId     = getClientId(request)
 
-  // Rate limiting
   if (pathname.startsWith('/api/') && !checkRateLimit(clientId, pathname)) {
     return new NextResponse(
       JSON.stringify({ success: false, error: 'Too many requests. Please wait.' }),
       {
         status: 429,
-        headers: {
-          'Content-Type': 'application/json',
-          'Retry-After':  '60',
-        },
+        headers: { 'Content-Type': 'application/json', 'Retry-After': '60' },
       }
     )
   }
 
-  // Cron auth check
   if (pathname.startsWith('/api/cron/')) {
     const authHeader = request.headers.get('Authorization')
     const cronSecret = process.env.CRON_SECRET
@@ -89,13 +81,25 @@ export default clerkMiddleware((auth, request) => {
     }
   }
 
-  // Clerk route protection — only when key is configured and route is protected
-  if (process.env.CLERK_SECRET_KEY && !isPublicRoute(request)) {
-    auth().protect()
+  if (protectFn && !isPublicRoute(request)) {
+    protectFn()
   }
 
   return applySecurityHeaders(NextResponse.next())
-})
+}
+
+// ── Middleware export ─────────────────────────────────────────────────────────
+// When CLERK_SECRET_KEY is set: wrap with clerkMiddleware for real auth.
+// When absent (local dev / smoke): plain middleware + ALLOW_PROTOTYPE_USER
+// handles auth inside each route via lib/auth.ts — no Clerk dev-browser rewrite.
+const clerkHandler = process.env.CLERK_SECRET_KEY
+  ? clerkMiddleware((auth, request) => handleRequest(request, () => auth().protect()))
+  : null
+
+export default function middleware(request: NextRequest) {
+  if (clerkHandler) return clerkHandler(request)
+  return handleRequest(request)
+}
 
 export const config = {
   matcher: [
