@@ -251,8 +251,67 @@ pnpm dev
 | `/api/cron/news-ingestion` | Every 15 min, 9 AM–5 PM ET | Ingests and analyzes latest market news |
 | `/api/cron/trending-scan` | Every 30 min | Scans StockTwits for unusual ticker activity |
 | `/api/cron/cleanup` | Daily 1:00 AM | Expires feed events older than 7 days |
+| `/api/cron/regime-refresh` | Daily 2:30 AM (Mon–Fri) | Refreshes ^NSEI and ^GSPC regime snapshots |
+| `/api/cron/trader-models` | Daily 1:00 AM | Recomputes TraderModel for active users |
+| `/api/cron/mind-directives` | Daily 3:00 AM (Mon–Fri) | Generates Mind Directives for active users |
 
 All cron routes require a `Bearer` token matching `CRON_SECRET`. Generate one with `openssl rand -hex 32` and set it in both `.env.local` and Vercel dashboard.
+
+---
+
+## ULTRA — V7 Mind Engine (current)
+
+> Phase 2 adds a proprietary behavioral intelligence layer that fuses market regime
+> with each trader's own verified statistics to produce a personalized daily directive.
+
+### Architecture
+
+```
+                   ┌─────────────────────────────────────────┐
+                   │           Mind Engine (V7)              │
+                   │                                         │
+ Market Data ──►  │  Gaussian HMM (regime-service/Python)   │
+                   │  ↓ BULL_TREND | BEAR_TREND | CHOP | CRISIS │
+                   │                                         │
+ Trade History ►  │  TraderModel (pure TS, zero AI)         │
+                   │  ↓ winRate, expectancyR, statsBySetup   │
+                   │  ↓ 4 behavioral flags (n≥5 threshold)  │
+                   │                                         │
+ Journals ──────► │  Mind Directive (AI synthesis)          │
+                   │  ↓ headline + reads + EV + oneRule     │
+                   └─────────────────────────────────────────┘
+                            │
+                   ┌────────▼────────┐
+                   │  Live Copilot   │  ← fused with TraderModel flags
+                   │  + Directive EV │    and statsAfterLoss
+                   └─────────────────┘
+```
+
+### New in V7
+
+- **Regime Classifier** — Gaussian HMM on 5y daily returns, 4-state labels, 6h Redis cache, heuristic fallback. Python microservice in `regime-service/`.
+- **TraderModel** — pure TypeScript stat engine. Computes winRate, expectancyR, profitFactor, statsBySetup/Regime/Hour, statsAfterLoss/Win, convictionCalib, and 4 behavioral flags. Calibrates at ≥20 trades AND ≥10 journals.
+- **Mind Directive** — daily AI synthesis of regime + TraderModel → JSON directive with headline, market read, personal read, EV assessment, greenlight/avoid setups, size guidance, and ONE imperative rule. PRO-gated; FREE users see blurred preview + upgrade CTA.
+- **Copilot × Mind Fusion** — behavioral agent receives top 2 flags + statsAfterLoss + today's EV for hyper-personalized real-time warnings.
+- **Trade Log** (`/trades`) — R-multiple tracking, setup tags, conviction stars, close modal with live P&L preview.
+- **Mind Page** (`/mind`) — three-column layout: directive + history, full TraderModelCard, regime panels.
+
+### Behavioral Flags
+
+| Flag | Trigger |
+|------|---------|
+| `OVERSIZE_AFTER_WINS` | Avg position size after 2+ consecutive wins > 1.3× baseline (n≥5) |
+| `REVENGE_FAST_REENTRY` | ≥3 same-setup re-entries within 15 min of a loss |
+| `LATE_DAY_LEAK` | Last-hour expectancyR < overall expectancyR − 0.3R (n≥8) |
+| `CONVICTION_INVERTED` | Win rate at 5★ < win rate at ≤2★ (both n≥5) |
+
+### Honesty Guarantees (V7)
+
+- Every AI output labeled with actual model used
+- Every statistic shows sample size: `58% (n=31)`
+- TraderModel shows `CALIBRATING` when <20 trades or <10 journals
+- Approximations labeled `(approx)` — regime from heuristic fallback
+- App never places trades; disclaimer on every analysis surface
 
 ---
 
@@ -267,13 +326,21 @@ All cron routes require a `Bearer` token matching `CRON_SECRET`. Generate one wi
 - [x] Real-time Pusher feed
 - [x] PsychProfile — emotion tracking over time
 
-### V5 — Live Trading Copilot (next)
-- [ ] 6 parallel agents fire on position open (broker webhook)
-- [ ] Behavioral Monitor — real-time tilt/panic detection during active trades
-- [ ] Dark pool + institutional flow (Unusual Whales, FlowAlgo)
-- [ ] On-chain intelligence (Glassnode, Nansen)
-- [ ] Gamma exposure analysis (SpotGamma)
-- [ ] Emergency intervention UI — full-screen modal when `psychState = TILT`
+### V7 — Mind Engine (shipped)
+- [x] Gaussian HMM regime classifier (Python microservice)
+- [x] TraderModel — 4 behavioral flags, zero AI
+- [x] Mind Directive — daily AI directive, PRO-gated
+- [x] Copilot × Mind Fusion — flags injected into behavioral agent
+- [x] Trade Log with R-multiple tracking
+- [x] /mind page — three-column layout
+- [x] Extended demo seed — 30 closed trades, all flags firing
+
+### V8 — Execution Intelligence (next)
+- [ ] Broker webhook integration (Zerodha Kite, IBKR)
+- [ ] Pre-trade checklist gate — blocks entry until all rules verified
+- [ ] Emergency intervention — full-screen modal when `psychState = TILT`
+- [ ] Position sizing calculator respecting TraderModel size guidance
+- [ ] Streak-based regime alerts (3+ consecutive regime changes)
 
 ---
 

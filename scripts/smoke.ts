@@ -127,6 +127,17 @@ async function main() {
     check('GET /api/cron/morning-brief (unauthed)', () =>
       fetch(`${BASE_URL}/api/cron/morning-brief`)
     ),
+
+    // Phase 2: Mind Engine endpoints — all auth-gated
+    check('GET /api/regime?symbol=RELIANCE.NS (unauthed)', () =>
+      fetch(`${BASE_URL}/api/regime?symbol=RELIANCE.NS`)
+    ),
+    check('GET /api/trader-model (unauthed)', () =>
+      fetch(`${BASE_URL}/api/trader-model`)
+    ),
+    check('GET /api/mind/directive (unauthed)', () =>
+      fetch(`${BASE_URL}/api/mind/directive`)
+    ),
   ])
 
   let passed = 0
