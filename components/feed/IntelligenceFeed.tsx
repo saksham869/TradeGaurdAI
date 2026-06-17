@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { TrendingUp, TrendingDown, Minus, ChevronDown, ChevronUp, AlertTriangle, Filter, RefreshCw } from 'lucide-react'
 
 interface FeedEvent {
@@ -154,8 +154,23 @@ export default function IntelligenceFeed({ onStatsLoad }: Props) {
 
   useEffect(() => { loadEvents() }, [loadEvents])
 
-  const eventTypes = ['ALL', ...Array.from(new Set(events.map(e => e.eventType))).sort()]
-  const filtered   = filter === 'ALL' ? events : events.filter(e => e.eventType === filter)
+  const FEED_TABS = [
+    { key: 'ALL',         label: 'All'         },
+    { key: 'HIGH_IMPACT', label: 'High Impact' },
+    { key: 'RETAIL_TRAP', label: 'Retail Trap' },
+    { key: 'BULLISH',     label: 'Bullish'     },
+    { key: 'BEARISH',     label: 'Bearish'     },
+  ] as const
+
+  const filtered = useMemo(() => {
+    switch (filter) {
+      case 'HIGH_IMPACT': return events.filter(e => e.impactLevel === 'HIGH' || e.impactLevel === 'CRITICAL')
+      case 'RETAIL_TRAP': return events.filter(e => e.retailTrap)
+      case 'BULLISH':     return events.filter(e => e.sentimentScore >= 65)
+      case 'BEARISH':     return events.filter(e => e.sentimentScore <= 40)
+      default:            return events
+    }
+  }, [events, filter])
 
   if (loading) {
     return (
@@ -173,15 +188,15 @@ export default function IntelligenceFeed({ onStatsLoad }: Props) {
           <Filter size={12} />
           <span style={{ fontSize: '11px', fontWeight: '600', letterSpacing: '0.05em' }}>FILTER</span>
         </div>
-        {eventTypes.map(f => (
-          <button key={f} onClick={() => setFilter(f)} style={{
+        {FEED_TABS.map(({ key, label }) => (
+          <button key={key} onClick={() => setFilter(key)} style={{
             padding: '5px 12px', borderRadius: '6px', cursor: 'pointer',
-            border: `1px solid ${filter === f ? 'rgba(59,130,246,0.4)' : 'var(--border-muted)'}`,
-            background: filter === f ? 'rgba(59,130,246,0.1)' : 'var(--bg-surface)',
-            color: filter === f ? 'var(--accent-blue)' : 'var(--text-muted)',
+            border: `1px solid ${filter === key ? 'rgba(59,130,246,0.4)' : 'var(--border-muted)'}`,
+            background: filter === key ? 'rgba(59,130,246,0.1)' : 'var(--bg-surface)',
+            color: filter === key ? 'var(--accent-blue)' : 'var(--text-muted)',
             fontSize: '11px', fontWeight: '600', transition: 'all 0.15s ease',
           }}>
-            {f}
+            {label}
           </button>
         ))}
         <button

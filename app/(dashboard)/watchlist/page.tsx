@@ -84,10 +84,17 @@ export default function WatchlistPage() {
       .then(d => {
         if (d.success) {
           setItems(d.data)
+          // Pre-set loading state so skeleton renders immediately
+          const initPrices: Record<string, PriceData> = {}
+          d.data.forEach((i: WatchlistItem) => {
+            initPrices[i.symbol] = { price: 0, change: 0, changePct: 0, high: 0, low: 0, volume: 0, name: '', currency: '', loading: true, error: false }
+          })
+          setPrices(initPrices)
           refreshAllPrices(d.data.map((i: WatchlistItem) => i.symbol))
         }
       })
       .finally(() => setLoading(false))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // Auto-refresh prices every 30s
@@ -266,19 +273,19 @@ export default function WatchlistPage() {
                   </span>
                 </div>
 
-                {p?.loading ? (
+                {!p || p.loading ? (
                   <div className="skeleton" style={{ height: '16px', width: '70px', borderRadius: '4px' }} />
-                ) : p?.error ? (
+                ) : p.error ? (
                   <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>—</span>
                 ) : (
                   <span style={{ fontFamily: 'JetBrains Mono, monospace', fontWeight: '700', fontSize: '13px', color: 'var(--text-primary)' }}>
-                    {cs}{p?.price?.toLocaleString('en-IN', { maximumFractionDigits: 2 }) ?? '—'}
+                    {cs}{p.price.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
                   </span>
                 )}
 
-                {p?.loading ? (
+                {!p || p.loading ? (
                   <div className="skeleton" style={{ height: '16px', width: '60px', borderRadius: '4px' }} />
-                ) : p?.error ? (
+                ) : p.error ? (
                   <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>—</span>
                 ) : (
                   <div>
