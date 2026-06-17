@@ -68,16 +68,47 @@ export async function runCopilotAnalysis(sessionId: string, trade: Trade) {
     changePct: priceData?.changePct   ?? 0,
   }
 
-  // 3. Behavioral agent also needs PsychProfile
-  const psychProfile = await db.psychProfile.findUnique({
-    where: { userId: trade.userId },
-  })
+  // 3. Behavioral agent — PsychProfile + TraderModel flags + today's directive EV
+  const today = new Date().toISOString().slice(0, 10)
+  const [psychProfile, traderModel, todayDirective] = await Promise.all([
+    db.psychProfile.findUnique({ where: { userId: trade.userId } }),
+    db.traderModel.findUnique({
+      where:  { userId: trade.userId },
+      select: { behavioralFlags: true, statsAfterLoss: true, calibrated: true },
+    }),
+    db.mindDirective.findUnique({
+      where:  { userId_directiveDate: { userId: trade.userId, directiveDate: today } },
+      select: { directive: true },
+    }),
+  ])
+
+  type BehavFlag = { flag: string; evidence: string; sampleSize: number }
+  const allFlags = (traderModel?.behavioralFlags as BehavFlag[] | null) ?? []
+  const topFlags = allFlags.slice(0, 2).map(f => ({ flag: f.flag, evidence: f.evidence }))
+
+  const afterLossRaw = traderModel?.statsAfterLoss as Record<string, unknown> | null
+  const statsAfterLoss = afterLossRaw
+    ? Object.entries(afterLossRaw)
+        .filter(([, v]) => typeof v === 'object' && v !== null && 'expectancyR' in v)
+        .map(([k, v]) => {
+          const s = v as { expectancyR: number; sampleSize: number }
+          return `${k}: ${s.expectancyR >= 0 ? '+' : ''}${s.expectancyR.toFixed(2)}R (n=${s.sampleSize})`
+        })
+        .slice(0, 3)
+        .join(', ')
+    : null
+
+  const todayEV = (todayDirective?.directive as Record<string, unknown> | null)?.todayEV as string | null ?? null
+
   const behavCtx: BehavioralContext = {
     ...ctx,
     dominantBias:   psychProfile?.dominantTag ?? 'NEUTRAL',
     totalEntries:   psychProfile?.totalEntries ?? 0,
     recentEmotions: Object.keys(psychProfile?.tagFrequency ?? {}).slice(0, 3).join(', '),
     streakDays:     psychProfile?.streakDays ?? 0,
+    topFlags:       topFlags.length > 0 ? topFlags : null,
+    statsAfterLoss: statsAfterLoss || null,
+    todayEV,
   }
 
   // 4. Fire all 6 agents in parallel — allSettled so one failure never kills the rest

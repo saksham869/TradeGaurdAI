@@ -22,10 +22,14 @@ export interface CopilotContext {
 }
 
 export interface BehavioralContext extends CopilotContext {
-  dominantBias:   string
-  totalEntries:   number
-  recentEmotions: string
-  streakDays:     number
+  dominantBias:       string
+  totalEntries:       number
+  recentEmotions:     string
+  streakDays:         number
+  // Mind Engine fusion — top 2 behavioral flags + streak stats + today's EV
+  topFlags:           Array<{ flag: string; evidence: string }> | null
+  statsAfterLoss:     string | null  // stringified condensed stats
+  todayEV:            string | null  // POSITIVE|NEGATIVE|NEUTRAL|UNKNOWN
 }
 
 const c = (ctx: CopilotContext) =>
@@ -193,7 +197,14 @@ TRADER PROFILE (from journal history):
 - Dominant bias: ${ctx.dominantBias}
 - Journal entries analyzed: ${ctx.totalEntries}
 - Recent emotion patterns: ${ctx.recentEmotions || 'none yet'}
-- Journaling streak: ${ctx.streakDays} days
+- Journaling streak: ${ctx.streakDays} days${ctx.topFlags && ctx.topFlags.length > 0 ? `
+
+VERIFIED BEHAVIORAL FLAGS (from TraderModel — cite these specifically):
+${ctx.topFlags.map((f, i) => `${i + 1}. ${f.flag}: ${f.evidence}`).join('\n')}` : ''}${ctx.statsAfterLoss ? `
+
+AFTER-LOSS STATS: ${ctx.statsAfterLoss}` : ''}${ctx.todayEV ? `
+
+TODAY'S MIND DIRECTIVE EV: ${ctx.todayEV}` : ''}
 
 CURRENT SITUATION:
 - ${ctx.symbol} ${ctx.side} | Entry $${ctx.entryPrice} | Now $${ctx.currentPrice}
