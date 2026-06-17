@@ -1,7 +1,8 @@
 "use client"
 
-import { useState, useEffect } from 'react'
-import { X, TrendingUp, TrendingDown, AlertTriangle, Shield } from 'lucide-react'
+import { useState, useEffect, useRef, useCallback } from 'react'
+import { X, TrendingUp, TrendingDown, AlertTriangle, Shield, Search } from 'lucide-react'
+import { searchPopularSymbols } from '@/lib/data/symbols'
 
 interface Props {
   onClose: () => void
@@ -14,6 +15,9 @@ const PORTFOLIO_KEY = 'tradeguard_portfolio_value'
 export default function NewPositionModal({ onClose, onCreated }: Props) {
   const [side, setSide]               = useState<'LONG' | 'SHORT'>('LONG')
   const [symbol, setSymbol]           = useState('')
+  const [symbolOpen, setSymbolOpen]   = useState(false)
+  const [symbolFocus, setSymbolFocus] = useState(0)
+  const symbolRef                     = useRef<HTMLDivElement>(null)
   const [assetClass, setAssetClass]   = useState('STOCK')
   const [entryPrice, setEntryPrice]   = useState('')
   const [quantity, setQuantity]       = useState('')
@@ -26,6 +30,22 @@ export default function NewPositionModal({ onClose, onCreated }: Props) {
   useEffect(() => {
     const saved = localStorage.getItem(PORTFOLIO_KEY)
     if (saved) setPortfolio(saved)
+  }, [])
+
+  const symbolSuggestions = symbol.length >= 1 ? searchPopularSymbols(symbol, 6) : []
+
+  const pickSymbol = useCallback((sym: string) => {
+    setSymbol(sym)
+    setSymbolOpen(false)
+  }, [])
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    function handle(e: MouseEvent) {
+      if (symbolRef.current && !symbolRef.current.contains(e.target as Node)) setSymbolOpen(false)
+    }
+    document.addEventListener('mousedown', handle)
+    return () => document.removeEventListener('mousedown', handle)
   }, [])
 
   // Risk calculation
@@ -115,11 +135,48 @@ export default function NewPositionModal({ onClose, onCreated }: Props) {
 
           {/* Symbol + Asset Class */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '10px' }}>
-            <div>
+            <div ref={symbolRef} style={{ position: 'relative' }}>
               <label style={{ fontSize: '11px', fontWeight: '600', color: 'var(--text-secondary)', display: 'block', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Symbol</label>
               <input className="input-field" placeholder="AAPL" value={symbol}
-                onChange={e => setSymbol(e.target.value.toUpperCase())}
-                style={{ fontFamily: 'JetBrains Mono, monospace', fontWeight: '600' }} />
+                onChange={e => { setSymbol(e.target.value.toUpperCase()); setSymbolOpen(true); setSymbolFocus(0) }}
+                onFocus={() => setSymbolOpen(true)}
+                onKeyDown={e => {
+                  if (!symbolOpen || !symbolSuggestions.length) return
+                  if (e.key === 'ArrowDown')  { e.preventDefault(); setSymbolFocus(f => Math.min(f + 1, symbolSuggestions.length - 1)) }
+                  if (e.key === 'ArrowUp')    { e.preventDefault(); setSymbolFocus(f => Math.max(f - 1, 0)) }
+                  if (e.key === 'Enter')      { e.preventDefault(); pickSymbol(symbolSuggestions[symbolFocus].symbol) }
+                  if (e.key === 'Escape')     setSymbolOpen(false)
+                }}
+                autoComplete="off"
+                style={{ fontFamily: 'JetBrains Mono, monospace', fontWeight: '600', width: '100%' }} />
+              {symbolOpen && symbolSuggestions.length > 0 && (
+                <div style={{
+                  position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 200,
+                  marginTop: '4px', borderRadius: '8px', overflow: 'hidden',
+                  background: 'var(--bg-surface)', border: '1px solid var(--border-default)',
+                  boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
+                }}>
+                  {symbolSuggestions.map((s, i) => (
+                    <div
+                      key={s.symbol}
+                      onMouseDown={() => pickSymbol(s.symbol)}
+                      style={{
+                        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                        padding: '8px 12px', cursor: 'pointer',
+                        background: i === symbolFocus ? 'var(--bg-subtle)' : 'transparent',
+                        borderBottom: i < symbolSuggestions.length - 1 ? '1px solid var(--border-muted)' : 'none',
+                      }}
+                      onMouseEnter={() => setSymbolFocus(i)}
+                    >
+                      <div>
+                        <span style={{ fontFamily: 'JetBrains Mono, monospace', fontWeight: '700', fontSize: '12px', color: 'var(--text-primary)' }}>{s.symbol}</span>
+                        <span style={{ fontSize: '11px', color: 'var(--text-muted)', marginLeft: '8px' }}>{s.name}</span>
+                      </div>
+                      <span style={{ fontSize: '9px', padding: '1px 5px', borderRadius: '3px', background: 'var(--bg-subtle)', color: 'var(--text-muted)', fontFamily: 'JetBrains Mono, monospace' }}>{s.market}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
             <div>
               <label style={{ fontSize: '11px', fontWeight: '600', color: 'var(--text-secondary)', display: 'block', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Asset</label>

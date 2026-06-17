@@ -1,6 +1,7 @@
 "use client"
 
-import { useState } from 'react'
+import { useState, useEffect, Suspense } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { Search, TrendingUp, TrendingDown, BarChart2, Activity, AlertTriangle, RefreshCw, Zap, Database } from 'lucide-react'
 import AITransparencyBadge from '@/components/ui/AITransparencyBadge'
 import MarketStatusBadge from '@/components/shared/MarketStatusBadge'
@@ -248,12 +249,20 @@ function AnalysisPanel({ symbol, data }: { symbol: string; data: any }) {
   )
 }
 
-export default function ResearchPage() {
+function ResearchPageInner() {
+  const searchParams                    = useSearchParams()
   const [ticker,  setTicker]  = useState('')
   const [symbol,  setSymbol]  = useState('')
   const [data,    setData]    = useState<any>(null)
   const [loading, setLoading] = useState(false)
   const [error,   setError]   = useState<string | null>(null)
+
+  // Auto-trigger search when URL has ?symbol= (from TopBar quick search)
+  useEffect(() => {
+    const sym = searchParams.get('symbol')
+    if (sym) { setTicker(sym.toUpperCase()); handleSearch(sym) }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const handleSearch = async (sym: string) => {
     const s = sym.toUpperCase().trim()
@@ -399,5 +408,13 @@ export default function ResearchPage() {
         </div>
       )}
     </div>
+  )
+}
+
+export default function ResearchPage() {
+  return (
+    <Suspense>
+      <ResearchPageInner />
+    </Suspense>
   )
 }

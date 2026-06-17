@@ -206,22 +206,36 @@ export default function CopilotPanel({ position, onPositionUpdate }: Props) {
 
   const isClosed = position.status === 'CLOSED'
 
-  // ── load existing session ────────────────────────────────────────────────
+  // ── load existing session — auto-starts for OPEN positions with no session ──
   useEffect(() => {
     async function load() {
       setLoading(true)
       try {
         const res  = await fetch(`/api/positions/${position.id}`)
         const data = await res.json()
-        if (data.success && data.data.session) {
-          setSession(data.data.session)
+        if (data.success) {
+          if (data.data.session) {
+            setSession(data.data.session)
+          } else if (position.status === 'OPEN') {
+            setLoading(false)
+            setAnalyzing(true)
+            try {
+              const sr = await fetch(`/api/positions/${position.id}/copilot/start`, { method: 'POST' })
+              const sd = await sr.json()
+              if (sd.success) setSession(sd.data.session)
+            } finally {
+              setAnalyzing(false)
+            }
+            return
+          }
         }
       } finally {
         setLoading(false)
       }
     }
     load()
-  }, [position.id])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [position.id, position.status])
 
   // ── Pusher subscription ─────────────────────────────────────────────────
   useEffect(() => {
@@ -232,21 +246,6 @@ export default function CopilotPanel({ position, onPositionUpdate }: Props) {
     })
     return () => { pusherClient.unsubscribe(`copilot-${position.id}`) }
   }, [position.id])
-
-  // ── Auto-refresh while session is ACTIVE ────────────────────────────────
-  // 15s when Pusher is absent (polling mode), 60s when Pusher handles push
-  useEffect(() => {
-    if (session?.status !== 'ACTIVE' || isClosed) return
-    const interval = pusherEnabled ? 60_000 : 15_000
-    refreshTimer.current = setInterval(() => { triggerRefresh() }, interval)
-    return () => { if (refreshTimer.current) clearInterval(refreshTimer.current) }
-  }, [session?.status, isClosed])
-
-  // ── tick every second for elapsed labels ─────────────────────────────────
-  useEffect(() => {
-    const t = setInterval(() => setTick(n => n + 1), 1000)
-    return () => clearInterval(t)
-  }, [])
 
   // ── actions ──────────────────────────────────────────────────────────────
   async function startCopilot() {
@@ -270,6 +269,21 @@ export default function CopilotPanel({ position, onPositionUpdate }: Props) {
       setAnalyzing(false)
     }
   }, [position.id])
+
+  // ── Auto-refresh while session is ACTIVE ────────────────────────────────
+  // 15s when Pusher is absent (polling mode), 60s when Pusher handles push
+  useEffect(() => {
+    if (session?.status !== 'ACTIVE' || isClosed) return
+    const interval = pusherEnabled ? 60_000 : 15_000
+    refreshTimer.current = setInterval(() => { triggerRefresh() }, interval)
+    return () => { if (refreshTimer.current) clearInterval(refreshTimer.current) }
+  }, [session?.status, isClosed, triggerRefresh])
+
+  // ── tick every second for elapsed labels ─────────────────────────────────
+  useEffect(() => {
+    const t = setInterval(() => setTick(n => n + 1), 1000)
+    return () => clearInterval(t)
+  }, [])
 
   async function handleClosePosition() {
     const price = parseFloat(exitPrice)
