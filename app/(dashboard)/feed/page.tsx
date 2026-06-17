@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { Activity, TrendingUp, AlertTriangle, BarChart2, Flame, Brain, RefreshCw } from 'lucide-react'
 import IntelligenceFeed from '@/components/feed/IntelligenceFeed'
 import RegimeBadge from '@/components/shared/RegimeBadge'
+import DirectiveCard from '@/components/mind/DirectiveCard'
 
 interface FeedStats {
   total:        number
@@ -53,6 +54,7 @@ export default function FeedPage() {
   const [brief,     setBrief]     = useState<MarketBrief | null>(null)
   const [briefDate, setBriefDate] = useState<string | null>(null)
   const [generatingBrief, setGeneratingBrief] = useState(false)
+  const [isPro,     setIsPro]     = useState(false)
 
   useEffect(() => {
     // Load trending
@@ -69,6 +71,12 @@ export default function FeedPage() {
           setBriefDate(d.data.briefDate)
         }
       })
+
+    // Check plan for DirectiveCard gating
+    fetch('/api/mind/directive')
+      .then(r => r.json())
+      .then(d => { if (d.plan) setIsPro(d.plan === 'PRO') })
+      .catch(() => null)
   }, [])
 
   async function generateBrief() {
@@ -101,6 +109,9 @@ export default function FeedPage() {
 
   return (
     <div>
+      {/* Mind Directive — mounts at top until acked, then collapses */}
+      <DirectiveCard isPro={isPro} />
+
       <div style={{ marginBottom: '24px' }}>
         <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', flexWrap:'wrap', gap:'8px', marginBottom:'4px' }}>
           <h1 style={{ fontSize: '20px', fontWeight: '700', color: 'var(--text-primary)' }}>
