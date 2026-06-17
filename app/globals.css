@@ -337,6 +337,12 @@ body {
   /* Copilot: stacked accordion grid */
   .copilot-grid { grid-template-columns: 1fr !important; }
 
+  /* Mind: stacked three columns */
+  .mind-grid { grid-template-columns: 1fr !important; }
+
+  /* Directive reads: stacked on mobile */
+  .directive-reads { grid-template-columns: 1fr !important; }
+
   /* Journal forms: full width */
   .journal-form { max-width: 100% !important; }
 
