@@ -4,6 +4,7 @@ import { processJournalEntry } from '@/lib/services/journal.service'
 import { getUserId } from '@/lib/auth'
 import { checkContentSafety } from '@/lib/ai/azure-content-safety'
 import { assertWithinPlan, PlanLimitError } from '@/lib/gating'
+import { recomputeTraderModel } from '@/lib/services/traderModel.service'
 
 export async function GET() {
   const userId = await getUserId()
@@ -74,6 +75,9 @@ export async function POST(request: NextRequest) {
     }
 
     const updatedEntry = await db.journalEntry.findUnique({ where: { id: entry.id } })
+
+    // Fire trader-model recompute asynchronously (non-blocking)
+    recomputeTraderModel(userId).catch(() => null)
 
     return NextResponse.json({
       success: true,

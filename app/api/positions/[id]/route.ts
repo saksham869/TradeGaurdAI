@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import db from '@/lib/db'
 import { getUserId } from '@/lib/auth'
+import { recomputeTraderModel } from '@/lib/services/traderModel.service'
 
 export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
   const userId = await getUserId()
@@ -105,6 +106,11 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
       where: { id: params.id },
       data:  updateData,
     })
+
+    // Fire trader-model recompute asynchronously on close (non-blocking)
+    if (status === 'CLOSED') {
+      recomputeTraderModel(userId).catch(() => null)
+    }
 
     return NextResponse.json({ success: true, data: updated })
   } catch (error) {
