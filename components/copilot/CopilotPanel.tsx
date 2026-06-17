@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { RefreshCw, Play, ChevronDown, ChevronUp, AlertTriangle, Radio, Clock, X, DollarSign, Zap } from 'lucide-react'
-import { pusherClient } from '@/lib/pusher-client'
+import { pusherClient, pusherEnabled } from '@/lib/pusher-client'
 import TiltInterventionModal from './TiltInterventionModal'
 import type { BehavioralRawOutput } from './TiltInterventionModal'
 
@@ -233,10 +233,12 @@ export default function CopilotPanel({ position, onPositionUpdate }: Props) {
     return () => { pusherClient.unsubscribe(`copilot-${position.id}`) }
   }, [position.id])
 
-  // ── 60-second auto-refresh while session is ACTIVE ──────────────────────
+  // ── Auto-refresh while session is ACTIVE ────────────────────────────────
+  // 15s when Pusher is absent (polling mode), 60s when Pusher handles push
   useEffect(() => {
     if (session?.status !== 'ACTIVE' || isClosed) return
-    refreshTimer.current = setInterval(() => { triggerRefresh() }, 60_000)
+    const interval = pusherEnabled ? 60_000 : 15_000
+    refreshTimer.current = setInterval(() => { triggerRefresh() }, interval)
     return () => { if (refreshTimer.current) clearInterval(refreshTimer.current) }
   }, [session?.status, isClosed])
 

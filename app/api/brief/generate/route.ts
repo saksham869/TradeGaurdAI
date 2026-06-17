@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic'
+
 import { NextResponse } from 'next/server'
 import { getUserId } from '@/lib/auth'
 import { generateMorningBrief } from '@/lib/services/brief.service'

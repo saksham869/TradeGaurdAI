@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic'
+
 import { NextRequest, NextResponse } from 'next/server'
 import { analyzeTickerParallel } from '@/lib/services/research.service'
 import { getUserId } from '@/lib/auth'
