@@ -21,12 +21,14 @@ function atIST(base: Date, istHour: number, istMin = 0): Date {
 async function main() {
   console.log('Seeding India demo user…')
 
+  // Use the fixed prototype ID so ALLOW_PROTOTYPE_USER routes resolve correctly
   const user = await prisma.user.upsert({
-    where: { email: 'demo@tradeguard.app' },
-    update: {},
+    where: { id: 'user_v1_prototype' },
+    update: { plan: 'PRO', name: 'Arjun Sharma', timezone: 'Asia/Kolkata', currency: 'INR', onboarded: true },
     create: {
-      clerkId: 'user_demo_india_v1',
-      email: 'demo@tradeguard.app',
+      id: 'user_v1_prototype',
+      clerkId: 'user_v1_prototype',
+      email: 'demo@tradeguard.ai',
       name: 'Arjun Sharma',
       plan: 'PRO',
       timezone: 'Asia/Kolkata',
@@ -325,13 +327,6 @@ async function main() {
   })
   console.log('  feed: 3 India-context events')
 
-  // Prototype user for backward compat
-  await prisma.user.upsert({
-    where: { email: 'trader@tradeguard.ai' },
-    update: {},
-    create: { clerkId: 'user_v1_prototype', email: 'trader@tradeguard.ai', name: 'TradeGuard Prototype', plan: 'PRO' },
-  })
-
   // ── Programmatic TraderModel recompute ─────────────────────────────────────
   // All 4 behavioral flags should fire: OVERSIZE_AFTER_WINS, LATE_DAY_LEAK,
   // CONVICTION_INVERTED, REVENGE_FAST_REENTRY
@@ -339,7 +334,7 @@ async function main() {
   console.log('  traderModel: recomputed (all 4 behavioral flags verified)')
 
   console.log('\nSeeding complete.')
-  console.log(`  Demo user   → email: demo@tradeguard.app`)
+  console.log(`  Demo user   → id: ${user.id}, email: ${user.email}`)
   console.log(`  Open trades → RELIANCE.NS @ ₹2950, INFY.NS @ ₹1580`)
   console.log(`  Closed      → 30 trades (15W 15L) — calibrated ✓`)
   console.log(`  Journals    → 12 entries`)
