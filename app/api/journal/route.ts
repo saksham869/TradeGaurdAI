@@ -61,20 +61,20 @@ export async function POST(request: NextRequest) {
       },
     })
 
-    // AI processing — degrade gracefully when daily budget is exhausted
+    // AI processing — degrade gracefully when budget exhausted or any provider fails
     let degraded = false
     try {
       await processJournalEntry(userId, entry.id, rawText, symbol)
     } catch (err) {
-      if (err instanceof Error && err.message === 'AI_BUDGET_EXCEEDED') {
-        degraded = true
-        await db.journalEntry.update({
-          where: { id: entry.id },
-          data: { processingStatus: 'pending' },
-        })
-      } else {
-        throw err
+      degraded = true
+      const reason = err instanceof Error ? err.message : String(err)
+      if (reason !== 'AI_BUDGET_EXCEEDED') {
+        console.error('Journal AI processing failed (degrading to pending):', reason)
       }
+      await db.journalEntry.update({
+        where: { id: entry.id },
+        data: { processingStatus: 'pending' },
+      })
     }
 
     const updatedEntry = await db.journalEntry.findUnique({ where: { id: entry.id } })
@@ -87,7 +87,7 @@ export async function POST(request: NextRequest) {
       data: updatedEntry || entry,
       ...(degraded && {
         degraded: true,
-        degradedReason: 'AI analysis unavailable — daily budget reached. Your entry is saved and will be processed tomorrow.',
+        degradedReason: 'AI analysis unavailable — your entry is saved and will be processed when services recover.',
       }),
     })
   } catch (error) {

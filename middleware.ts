@@ -74,8 +74,8 @@ function handleRequest(request: NextRequest, protectFn?: () => void): NextRespon
       const isVercelCron = request.headers.get('x-vercel-cron') === '1'
       if (!isVercelCron) {
         return new NextResponse(
-          JSON.stringify({ success: false, error: 'Forbidden' }),
-          { status: 403, headers: { 'Content-Type': 'application/json' } }
+          JSON.stringify({ success: false, error: 'Unauthorized' }),
+          { status: 401, headers: { 'Content-Type': 'application/json' } }
         )
       }
     }
