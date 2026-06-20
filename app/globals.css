@@ -225,6 +225,19 @@ body {
 }
 .slide-in { animation: slideIn 0.3s ease forwards; }
 
+/* Ask TradeGuard panel slide-in from right */
+@keyframes tg-panel-slide-in {
+  from { opacity: 0; transform: translateX(24px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+/* Mini stock card scan shimmer — the ONE sanctioned scan-line effect, live prices only */
+@keyframes tg-mini-card-scan {
+  0%   { border-color: var(--border-muted); }
+  50%  { border-color: var(--border-default); }
+  100% { border-color: var(--border-muted); }
+}
+
 /* Tilt intervention modal */
 @keyframes tiltAppear {
   from { opacity: 0; transform: scale(0.95) translateY(10px); }

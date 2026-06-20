@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useRef } from 'react'
-import { Bell, Clock, RefreshCw, Search, Settings, LogOut, ChevronDown } from 'lucide-react'
+import { Bell, Clock, RefreshCw, Search, Settings, Bot, ChevronDown } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { searchPopularSymbols } from '@/lib/data/symbols'
 
@@ -17,6 +17,10 @@ interface UserProfile {
   plan:  string
 }
 
+interface TopBarProps {
+  onOpenAssistant: () => void
+}
+
 const WATCH_TICKERS = [
   { symbol: 'SPY',      label: 'SPY', yahooSymbol: 'SPY'      },
   { symbol: 'QQQ',      label: 'QQQ', yahooSymbol: 'QQQ'      },
@@ -24,7 +28,7 @@ const WATCH_TICKERS = [
   { symbol: 'USDINR=X', label: '₹',   yahooSymbol: 'USDINR=X' },
 ]
 
-export default function TopBar() {
+export default function TopBar({ onOpenAssistant }: TopBarProps) {
   const router                          = useRouter()
   const [prices,    setPrices]          = useState<Record<string, TickerPrice>>({})
   const [time,      setTime]            = useState(new Date())
@@ -35,6 +39,7 @@ export default function TopBar() {
   const [user,       setUser]           = useState<UserProfile | null>(null)
   const searchRef                       = useRef<HTMLDivElement>(null)
   const profileRef                      = useRef<HTMLDivElement>(null)
+  const searchInputRef                  = useRef<HTMLInputElement>(null)
 
   const searchSuggestions = searchVal.length >= 1 ? searchPopularSymbols(searchVal, 6) : searchPopularSymbols('', 6)
 
@@ -84,6 +89,28 @@ export default function TopBar() {
     document.addEventListener('mousedown', handle)
     return () => document.removeEventListener('mousedown', handle)
   }, [])
+
+  // Global keyboard shortcuts
+  // ⌘K / Ctrl+K → focus symbol search (symbol-search only — NOT a full command palette)
+  // TODO: Full ⌘K command palette (fuzzy search across journal/settings/actions per DESIGN.md 7.4)
+  //       is a separate future build. This is symbol-search only for now.
+  // ⌘J / Ctrl+J → open Ask TradeGuard assistant panel
+  useEffect(() => {
+    function handleKey(e: KeyboardEvent) {
+      const mod = e.metaKey || e.ctrlKey
+      if (mod && e.key === 'k') {
+        e.preventDefault()
+        searchInputRef.current?.focus()
+        setSearchOpen(true)
+      }
+      if (mod && e.key === 'j') {
+        e.preventDefault()
+        onOpenAssistant()
+      }
+    }
+    document.addEventListener('keydown', handleKey)
+    return () => document.removeEventListener('keydown', handleKey)
+  }, [onOpenAssistant])
 
   function navigateSearch(symbol: string) {
     if (!symbol.trim()) return
@@ -140,6 +167,7 @@ export default function TopBar() {
         <div style={{ position: 'relative' }}>
           <Search size={13} color="var(--text-muted)" style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
           <input
+            ref={searchInputRef}
             style={{
               width: '100%', padding: '6px 10px 6px 30px',
               background: 'var(--bg-subtle)', border: '1px solid var(--border-muted)',
@@ -148,7 +176,7 @@ export default function TopBar() {
               outline: 'none', textTransform: 'uppercase',
               transition: 'border-color 0.15s',
             }}
-            placeholder="Quick search…"
+            placeholder="⌘K  Quick search…"
             value={searchVal}
             onChange={e => { setSearchVal(e.target.value); setSearchFocus(0) }}
             onFocus={() => setSearchOpen(true)}
@@ -198,6 +226,27 @@ export default function TopBar() {
           <Clock size={11} />
           <span style={{ fontFamily: 'JetBrains Mono, monospace' }}>{timeStr} · {dateStr}</span>
         </div>
+
+        {/* Ask TradeGuard — ⌘J */}
+        <button
+          onClick={onOpenAssistant}
+          title="Ask TradeGuard (⌘J)"
+          style={{
+            display: 'flex', alignItems: 'center', gap: '5px',
+            padding: '0 10px', height: '30px',
+            background: 'var(--bg-subtle)',
+            border: '1px solid var(--border-default)', borderRadius: '8px',
+            cursor: 'pointer', color: 'var(--text-secondary)',
+            fontSize: '11px', fontFamily: 'JetBrains Mono, monospace',
+            transition: 'all 0.12s',
+          }}
+          onMouseOver={e => { e.currentTarget.style.borderColor = 'var(--accent-blue)'; e.currentTarget.style.color = 'var(--accent-blue)' }}
+          onMouseOut={e => { e.currentTarget.style.borderColor = 'var(--border-default)'; e.currentTarget.style.color = 'var(--text-secondary)' }}
+        >
+          <Bot size={12} />
+          <span style={{ fontWeight: '600' }}>Ask</span>
+          <span style={{ color: 'var(--text-muted)', fontSize: '10px' }}>⌘J</span>
+        </button>
 
         <button style={{
           width: '30px', height: '30px', background: 'var(--bg-subtle)',

@@ -4,12 +4,14 @@ import { useState, useEffect } from 'react'
 import Sidebar from './Sidebar'
 import TopBar from './TopBar'
 import BottomNav from './BottomNav'
+import AskTradeGuard from './AskTradeGuard'
 import OnboardingModal from '@/components/shared/OnboardingModal'
 
 const ONBOARDING_KEY = 'tg_onboarded'
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [showOnboarding, setShowOnboarding] = useState(false)
+  const [assistantOpen, setAssistantOpen]   = useState(false)
 
   useEffect(() => {
     if (typeof window !== 'undefined' && !localStorage.getItem(ONBOARDING_KEY)) {
@@ -28,7 +30,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <Sidebar />
       </div>
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-        <TopBar />
+        <TopBar onOpenAssistant={() => setAssistantOpen(true)} />
         <main
           className="main-content-mobile"
           style={{ flex: 1, overflowY: 'auto', padding: '24px 28px' }}
@@ -37,6 +39,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </main>
       </div>
       <BottomNav />
+      <AskTradeGuard open={assistantOpen} onClose={() => setAssistantOpen(false)} />
       <OnboardingModal open={showOnboarding} onClose={dismissOnboarding} />
     </div>
   )

@@ -88,10 +88,11 @@ model User {
   onboarded    Boolean         @default(false)
   createdAt    DateTime        @default(now())
   updatedAt    DateTime        @updatedAt
-  watchlist    WatchlistItem[]
-  journals     JournalEntry[]
-  psychProfile PsychProfile?
-  trades       Trade[]
+  watchlist         WatchlistItem[]
+  journals          JournalEntry[]
+  psychProfile      PsychProfile?
+  trades            Trade[]
+  assistantMessages AssistantMessage[]
   @@index([clerkId])
 }
 
@@ -343,4 +344,19 @@ model MindDirective {
   directive       Json
   acknowledged    Boolean  @default(false)
   @@unique([userId, directiveDate])
+}
+
+// =============================================================================
+// V8 — Ask TradeGuard Assistant
+// =============================================================================
+
+model AssistantMessage {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role      String   // "user" | "assistant"
+  content   String   @db.Text
+  tokens    Int?
+  createdAt DateTime @default(now())
+  @@index([userId, createdAt])
 }
